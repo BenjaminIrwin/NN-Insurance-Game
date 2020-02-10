@@ -9,6 +9,7 @@ class ClaimClassifier():
         Feel free to alter this as you wish, adding instance variables as
         necessary. 
         """
+        pass
 
     def _preprocessor(self, X_raw):
         """Data preprocessing function.
@@ -51,6 +52,7 @@ class ClaimClassifier():
         # REMEMBER TO HAVE THE FOLLOWING LINE SOMEWHERE IN THE CODE
         # X_clean = self._preprocessor(X_raw)
         # YOUR CODE HERE
+        pass
 
     def predict(self, X_raw):
         """Classifier probability prediction function.
@@ -86,6 +88,7 @@ class ClaimClassifier():
         You can use external libraries such as scikit-learn for this
         if necessary.
         """
+        pass
 
     def save_model(self):
         # Please alter this file appropriately to work in tandem with your load_model function below
