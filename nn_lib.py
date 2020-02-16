@@ -189,13 +189,9 @@ class LinearLayer(Layer):
         # dlos/dx = dloss/dz*dz/dx
         #dlos/dw = x_transpose*dl/dz
         #dlos/db = ones_transpose*dl/dz
-        print("backward linear layer: ", self)
-        print("nin", self.n_in, "nout", self.n_out)
-        print("w shape", self._W.shape) 
         self._grad_W_current = self._cache_current.T.dot(grad_z)
         self._grad_b_current = np.ones([1,grad_z.shape[0]]).dot(grad_z)
 
-        print("yes been through")
         # gradient wrt input layer
         return grad_z.dot(self._W.T)
         
@@ -233,18 +229,22 @@ class MultiLayerNetwork(object):
         self.activations = activations
 
         # dictionary
-        dc = {'relu':'ReluLayer()','sigmoid':'SigmoidLayer()'}
+        dc = {'relu':'ReluLayer()','sigmoid':'SigmoidLayer()','identity':'None'}
         
         # create layers
         self._layers = np.empty([len(neurons) + len(activations)],dtype=object)
+
+        # first and final layers
         self._layers[0] = LinearLayer(input_dim, neurons[0])
         self._layers[-1] = eval(dc[activations[-1]])
-        
+
+        # other layers
         for i in range(1,self._layers.shape[0]-1,2):
-            print("layer", self._layers[i+1], "neurons", neurons[i//2],neurons[(i+1)//2])
             self._layers[i+1] = LinearLayer(neurons[i//2],neurons[(i+1)//2])
             self._layers[i] = eval(dc[activations[i//2]])
-        
+            
+        print(self._layers)
+            
     def forward(self, x):
 
         """
@@ -258,12 +258,14 @@ class MultiLayerNetwork(object):
                 #_neurons_in_final_layer)
         """
 
-        #print("now im before forward multi loop")
         for i in self._layers:
-            #print(i)
-            x = i.forward(x)
-        #print("now im after forward multi loop")
 
+            if i is not None:
+                print(i,"yeh boy")
+                x = i(x)
+                print("xloop",x)
+
+        print("x to be returned",x)
         return x
 
     
@@ -285,8 +287,10 @@ class MultiLayerNetwork(object):
 
        
         for i in range(self._layers.shape[0]-1,-1,-1):
-            print("backwardloop multilayer counter", i)
-            grad_z = self._layers[i].backward(grad_z)
+
+            if self._layers[i] is not None:
+                print("going backwards", self._layers[i])
+                grad_z = self._layers[i].backward(grad_z)
 
         return grad_z
 
@@ -300,7 +304,8 @@ class MultiLayerNetwork(object):
             learning_rate {float} -- Learning rate of update step.
         """
         for i in self._layers:
-            x = i.update_params(learning_rate)
+            if i is not None:
+                x = i.update_params(learning_rate)
 
 
 def save_network(network, fpath):
@@ -374,8 +379,8 @@ class Trainer(object):
         np.random.shuffle(data)
 
         #split and return
-        xshuff = np.array(data[:,:-1])
-        yshuff = np.array(data[:,-1])
+        xshuff = np.array(data[:,:input_dataset.shape[1]])
+        yshuff = np.array(data[:,-target_dataset.shape[1]:])
 
         return xshuff, yshuff
 
@@ -400,7 +405,7 @@ class Trainer(object):
             - target_dataset {np.ndarray} -- Array of corresponding targets, of
                 shape (#_training_data_points, ).
         """
-
+    
         # do i have to add one extra or not?
         for i in range(self.nb_epoch+1):
 
@@ -411,29 +416,30 @@ class Trainer(object):
 
             # Loop over all batches
             while(k<input_dataset.shape[0]):
-                #print("looped",k)
 
                 # Take batch
                 if(k+self.batch_size>input_dataset.shape[0]):
                     xdata = input_dataset[k:-1,:]
-                    ydata = input_dataset[k:-1]
+                    ydata = input_dataset[k:-1,:]
 
                 else:
                     xdata = input_dataset[k:k+self.batch_size,:]
-                    ydata = target_dataset[k:k+self.batch_size]
+                    ydata = target_dataset[k:k+self.batch_size,:]
                     
 
                 # forward pass
-                result = self.network.forward(xdata)
-
+                result = self.network(xdata)
+                print("results shape", result)
+                
                 #compute loss (is it better to slice every time or to take temporary variable?)
-                loss = eval_los(result, ydata)
-               
+                loss = np.array(self._loss_layer(result, ydata))
+
+                print("loss shape", loss)
                #backward pass
                 self.network.backward(loss)
                
                #gradient descent
-                self.network.update_params(learning_rate)
+                self.network.update_params(self.learning_rate)
 
                 #update counter
                 k = k+self.batch_size
@@ -449,7 +455,8 @@ class Trainer(object):
             - target_dataset {np.ndarray} -- Array of corresponding targets, of
                 shape (#_evaluation_data_points, ).
         """
-        return self._loss_layer.__call__(input_dataset,target_dataset)
+        result = self.network(input_dataset)
+        return self._loss_layer(result,target_dataset)
         
         
 
@@ -541,8 +548,8 @@ def example_main():
     y_train = y[:split_idx]
     x_val = x[split_idx:]
     y_val = y[split_idx:]
-
     """
+
     input_dim = 4
     neurons = [16, 3]
     activations = ["relu", "relu"]
@@ -554,6 +561,8 @@ def example_main():
     x = dat[:, :4]
     y = dat[:, 4:]
 
+    #print("x",x)
+    #print("y",y)
     split_idx = int(0.8 * len(x))
 
     x_train = x[:split_idx]
@@ -561,6 +570,7 @@ def example_main():
     x_val = x[split_idx:]
     y_val = y[split_idx:]
 
+    #print(y_train)
     prep_input = Preprocessor(x_train)
 
     x_train_pre = prep_input.apply(x_train)
@@ -579,8 +589,11 @@ def example_main():
     print("Train loss = ", trainer.eval_loss(x_train_pre, y_train))
     print("Validation loss = ", trainer.eval_loss(x_val_pre, y_val))
 
+    
     preds = net(x_val_pre).argmax(axis=1).squeeze()
     targets = y_val.argmax(axis=1).squeeze()
+    print("preds",preds)
+    print("targets",targets)
     accuracy = (preds == targets).mean()
     print("Validation accuracy: {}".format(accuracy))
 
