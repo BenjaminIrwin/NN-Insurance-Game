@@ -2,11 +2,58 @@ import numpy as np
 import pickle
 import matplotlib.pyplot as plt
 
+import random
+from sklearn.model_selection import train_test_split
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
+
+class InsuranceNN(nn.Module):
+    def __init__(self):
+        super(InsuranceNN, self).__init__()
+
+        self.apply_layers = nn.Sequential(
+            # 2 fully connected hidden layers of 8 neurons goes to 1
+            # 4 - (8 - 8) - 1
+            nn.Linear(9, 8),
+            nn.LeakyReLU(inplace=True),
+            nn.Dropout(),
+            nn.Linear(8, 8),
+            nn.LeakyReLU(inplace=True),
+            nn.Dropout(),
+            nn.Linear(8, 1),
+            nn.Sigmoid()
+        )
+
+    # Defining the forward pass
+    def forward(self, x):
+        x = self.apply_layers(x)
+        return x.view(len(x))
+
+
+class Batch_Maker:
+    def __init__(self, num_items, batch_size, seed = 0):
+        self.indices = np.arange(num_items)
+        self.num_items = num_items
+        self.batch_size = batch_size
+        self.rnd = np.random.RandomState(seed)
+        self.rnd.shuffle(self.indices)
+        self.ptr = 0
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self.ptr + self.batch_size > self.num_items:
+            self.rnd.shuffle(self.indices)
+            self.ptr = 0
+            raise StopIteration  # exit calling for-loop
+        else:
+            result = self.indices[self.ptr:self.ptr + self.batch_size]
+            self.ptr += self.batch_size
+            return result
 
 
 class ClaimClassifier():
@@ -35,8 +82,8 @@ class ClaimClassifier():
 
         num_att = len(data_set[0])  # number of parameters
 
-        x = np.array(data_set[:, :(num_att-2)])
-        y = np.array(data_set[:, (num_att-1)])
+        x = np.array(data_set[:, :(num_att-2)], dtype=np.float32)
+        y = np.array(data_set[:, (num_att-1)], dtype=np.float)
 
         return x, y
 
@@ -69,7 +116,7 @@ class ClaimClassifier():
                                                                     min_att)
 
 
-        return X_raw
+        return X_raw.astype(np.float32)
 
     def set_axis_style(self, ax, labels):
         ax.get_xaxis().set_tick_params(direction='out')
@@ -145,7 +192,96 @@ class ClaimClassifier():
         # REMEMBER TO HAVE THE FOLLOWING LINE SOMEWHERE IN THE CODE
         # X_clean = self._preprocessor(X_raw)
         # YOUR CODE HERE
-        pass
+        X_clean = self._preprocessor(X_raw)
+
+        # Split data into training and test data
+        train_x, test_x, train_y, test_y = train_test_split(X_clean, y_raw,
+                                                            test_size = 0.1)
+        print((train_x.shape, train_y.shape), (test_x.shape, test_y.shape))
+
+        train_x = torch.from_numpy(train_x)
+        #train_x = train_x.view(-1, 9)
+        train_y = torch.from_numpy(train_y)
+        print(train_x.shape, train_y.shape)
+        print(train_y.type())
+        model = InsuranceNN()
+        print(model)
+        print(model(train_x).shape)
+
+        model.train()
+        use_gpu = torch.cuda.is_available()
+        if use_gpu:
+            model = model.cuda()
+            print('Using GPU...')
+        else:
+            print('Using CPU...')
+
+        criterion = nn.BCELoss()
+        optimiser = optim.AdamW(model.parameters(), lr=0.001)
+
+        n_iterations = 30000
+        batch_size = 64
+
+        for iteration in range(n_iterations):
+            batch_data = torch.empty(batch_size, 9, dtype=torch.float)
+            batch_label = torch.empty(batch_size, dtype=torch.float)
+            # Fill random batch
+            for i in range(batch_size):
+                index = random.randint(0, train_x.shape[0] - 1)
+                batch_data[i] = train_x[index]
+                batch_label[i] = train_y[index]
+
+            batch_data = torch.autograd.Variable(batch_data)
+            batch_label = torch.autograd.Variable(batch_label)
+            batch_data = batch_data.type(torch.FloatTensor)
+            batch_label = batch_label.type(torch.FloatTensor)
+
+            if use_gpu:
+                batch_data = batch_data.cuda()
+                batch_label = batch_label.cuda()
+
+            # Perform gradient decent algorithm to reduce loss
+            optimiser.zero_grad()
+            batch_output = model(batch_data)
+            batch_label = batch_label.view(batch_size)
+            # Calculate loss by comparing ground truth to predictions on batch
+            batch_loss = criterion(batch_output, batch_label)
+            batch_loss.backward()
+            optimiser.step()
+
+            if (iteration + 1) % 100 == 0:
+                print("Iteration = %d, Loss = %f" % (
+                iteration + 1, batch_loss.item()))
+
+
+        # --------------------- TEST ----------------------
+
+        model.eval()
+
+        predictions = []
+        test_x = torch.from_numpy(test_x)
+
+        for sample_i in range(test_x.shape[0]):
+            test_sample = torch.autograd.Variable(test_x[sample_i:sample_i + 1].clone())
+            test_sample = test_sample.type(torch.FloatTensor)
+
+            if use_gpu:
+                sample_data = test_sample.cuda()
+
+            sample_out = model(test_sample)
+            pred = torch.round(sample_out)
+            predictions.append(pred)
+            if (sample_i + 1) % 100 == 0:
+                print("Total tested = %d" % (sample_i + 1))
+
+        # -------------------- EVALUATE -------------------
+
+        count = 0
+        for i in range(len(predictions)):
+            if predictions[i] == test_y[i]:
+                count += 1
+
+        print("Test Accuracy = ", count * 100 / 10000, "%")
 
     def predict(self, X_raw):
         """Classifier probability prediction function.
@@ -209,7 +345,8 @@ def ClaimClassifierHyperParameterSearch():
 
 test = ClaimClassifier()
 x, y = test.load_data("part2_training_data.csv")
-print(x.shape)
-print(y.shape)
 
+x_clean = test._preprocessor(x)
+print(x_clean.shape)
+test.fit(x, y)
 
