@@ -1,5 +1,12 @@
 import numpy as np
 import pickle
+import matplotlib.pyplot as plt
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+
 
 
 class ClaimClassifier():
@@ -10,6 +17,28 @@ class ClaimClassifier():
         necessary. 
         """
         pass
+
+    def load_data(self, filename):
+        """
+        Function to load data from file
+        Args:
+            filename (str) - name of .txt file you are loading data from
+        Output:
+            (x, y) (tuple) - x: 2D array of training data where each row
+            corresponds to a different sample and each column corresponds to a
+            different attribute.
+                            y: 1D array where each index corresponds to the
+            ground truth label of the sample x[index][]
+        """
+        # load data to single 2D array
+        data_set = np.genfromtxt(filename, dtype=float, delimiter=',', skip_header=1)
+
+        num_att = len(data_set[0])  # number of parameters
+
+        x = np.array(data_set[:, :(num_att-2)])
+        y = np.array(data_set[:, (num_att-1)])
+
+        return x, y
 
     def _preprocessor(self, X_raw):
         """Data preprocessing function.
@@ -29,7 +58,71 @@ class ClaimClassifier():
         """
         # YOUR CODE HERE
 
-        return  # YOUR CLEAN DATA AS A NUMPY ARRAY
+        num_samples, num_att = X_raw.shape
+
+        for att in range(num_att):
+            max_att = np.amax(X_raw[:, att])
+            min_att = np.amin(X_raw[:, att])
+
+            for sample in range(num_samples):
+               X_raw[sample, att] = (X_raw[sample, att] - min_att)/(max_att -
+                                                                    min_att)
+
+
+        return X_raw
+
+    def set_axis_style(self, ax, labels):
+        ax.get_xaxis().set_tick_params(direction='out')
+        ax.xaxis.set_ticks_position('bottom')
+        ax.set_xticks(np.arange(1, len(labels) + 1))
+        ax.set_xticklabels(labels)
+        ax.set_xlim(0.25, len(labels) + 0.75)
+        ax.set_xlabel('Sample name')
+
+    def evaluate_input(self, X_raw):
+        """
+        Function to evaluate data loaded from file
+
+        """
+
+        attributes = []
+        for i in range(np.shape(X_raw)[1]):
+            attributes.append(X_raw[:, i])
+
+
+        fig, ax1 = plt.subplots(figsize=(11, 4), sharey=True)
+
+        # type of plot
+        ax1.boxplot(attributes)
+        labels = ['drv_age1', 'vh_age', 'vh_cyl', 'vh_din', 'pol_bonus', 'vh_sl_b',
+                  'vh_sl_e', 'vh_value', 'vh_speed']
+
+        self.set_axis_style(ax1, labels)
+
+        plt.subplots_adjust(bottom=0.15, wspace=0.05)
+        # plt.show()
+        plt.xlabel("Attribute Type")
+        plt.ylabel("Attribute Value")
+
+        plt.savefig("box.pdf", bbox_inches='tight')
+
+        ####################
+
+        plt.cla()
+        ax1.violinplot(attributes)
+
+        labels = ['drv_age1', 'vh_age', 'vh_cyl', 'vh_din', 'pol_bonus',
+                  'vh_sl_b', 'vh_sl_e', 'vh_value', 'vh_speed']
+
+        self.set_axis_style(ax1, labels)
+
+        plt.subplots_adjust(bottom=0.15, wspace=0.05)
+        plt.xlabel("Attribute Type")
+        plt.ylabel("Attribute Value")
+
+
+        plt.savefig("violin.pdf", bbox_inches='tight')
+
 
     def fit(self, X_raw, y_raw):
         """Classifier training function.
@@ -113,3 +206,10 @@ def ClaimClassifierHyperParameterSearch():
     """
 
     return  # Return the chosen hyper parameters
+
+test = ClaimClassifier()
+x, y = test.load_data("part2_training_data.csv")
+print(x.shape)
+print(y.shape)
+
+
