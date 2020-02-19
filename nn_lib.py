@@ -137,15 +137,12 @@ class LinearLayer(Layer):
         self.n_in = n_in
         self.n_out = n_out
 
-        self._W = np.empty([n_in,n_out])
-        self._b = np.empty([n_out])
+        self._W = np.zeros([n_in,n_out])
+        self._b = np.zeros([n_out])
 
-        for i in self._W:
-            i = xavier_init((n_in+n_out)//2)
+        self._W = xavier_init((n_in,n_out))
+        self._b = xavier_init(n_out)
 
-        for i in self._b:
-            i = xavier_init((n_in+n_out)//2)
-        
         self._cache_current = None
         self._grad_W_current = None
         self._grad_b_current = None
@@ -165,10 +162,8 @@ class LinearLayer(Layer):
             {np.ndarray} -- Output array of shape (batch_size, n_out)
         """
         
-        # What should be stored in cache current?
-
         self._cache_current = x
-        return  x.dot(self._W) + np.tile(self._b,(x.shape[0],1))
+        return  x.dot(self._W) + self._b
     
     def backward(self, grad_z):
         """
@@ -185,14 +180,9 @@ class LinearLayer(Layer):
                 input, of shape (batch_size, n_in).
         """
 
-        # result should be dLoss/dx
-        # dlos/dx = dloss/dz*dz/dx
-        #dlos/dw = x_transpose*dl/dz
-        #dlos/db = ones_transpose*dl/dz
         self._grad_W_current = self._cache_current.T.dot(grad_z)
-        self._grad_b_current = np.ones([1,grad_z.shape[0]]).dot(grad_z)
+        self._grad_b_current = np.sum(grad_z,axis=0)
 
-        # gradient wrt input layer
         return grad_z.dot(self._W.T)
         
     def update_params(self, learning_rate):
@@ -227,24 +217,25 @@ class MultiLayerNetwork(object):
         self.input_dim = input_dim
         self.neurons = neurons
         self.activations = activations
+         
+        #create layers
+        self._layers = []
+        neurons.insert(0,input_dim)
 
-        # dictionary
-        dc = {'relu':'ReluLayer()','sigmoid':'SigmoidLayer()','identity':'None'}
+        for i in range(len(activations)):
+
+            self._layers.append(LinearLayer(neurons[i],neurons[i+1]))
+
+            if activations[i] == "relu":
+                self._layers.append(ReluLayer())
+
+            elif activations[i] == "sigmoid":
+                self._layers.append(SigmoidLayer())
+
+            
+        self._layers = np.array(self._layers)
         
-        # create layers
-        self._layers = np.empty([len(neurons) + len(activations)],dtype=object)
-
-        # first and final layers
-        self._layers[0] = LinearLayer(input_dim, neurons[0])
-        self._layers[-1] = eval(dc[activations[-1]])
-
-        # other layers
-        for i in range(1,self._layers.shape[0]-1,2):
-            self._layers[i+1] = LinearLayer(neurons[i//2],neurons[(i+1)//2])
-            self._layers[i] = eval(dc[activations[i//2]])
-            
-        print(self._layers)
-            
+ 
     def forward(self, x):
 
         """
@@ -260,12 +251,8 @@ class MultiLayerNetwork(object):
 
         for i in self._layers:
 
-            if i is not None:
-                print(i,"yeh boy")
-                x = i(x)
-                print("xloop",x)
+            x = i(x)
 
-        print("x to be returned",x)
         return x
 
     
@@ -288,8 +275,6 @@ class MultiLayerNetwork(object):
        
         for i in range(self._layers.shape[0]-1,-1,-1):
 
-            if self._layers[i] is not None:
-                print("going backwards", self._layers[i])
                 grad_z = self._layers[i].backward(grad_z)
 
         return grad_z
@@ -338,6 +323,7 @@ class Trainer(object):
         learning_rate,
         loss_fun,
         shuffle_flag,
+        adap_learn = False    
     ):
         """Constructor.
 
@@ -357,7 +343,8 @@ class Trainer(object):
         self.learning_rate = learning_rate
         self.loss_fun = loss_fun
         self.shuffle_flag = shuffle_flag
-
+        self.adap_learn = adap_learn
+        
         dc = {'mse':'MSELossLayer()','cross_entropy':'CrossEntropyLossLayer()'}
         self._loss_layer = eval(dc[loss_fun])
 
@@ -405,11 +392,15 @@ class Trainer(object):
             - target_dataset {np.ndarray} -- Array of corresponding targets, of
                 shape (#_training_data_points, ).
         """
-    
-        # do i have to add one extra or not?
-        for i in range(self.nb_epoch+1):
 
+        # Initialise list that stores loss every 50 epochs
+        lossList = [100000]
+
+        # Loop over epochs
+        for i in range(self.nb_epoch):
+            
             k = 0
+
             # shuffle data
             if self.shuffle_flag:
                 input_dataset,target_dataset = self.shuffle(input_dataset,target_dataset)
@@ -417,7 +408,7 @@ class Trainer(object):
             # Loop over all batches
             while(k<input_dataset.shape[0]):
 
-                # Take batch
+                #take batch
                 if(k+self.batch_size>input_dataset.shape[0]):
                     xdata = input_dataset[k:-1,:]
                     ydata = input_dataset[k:-1,:]
@@ -427,24 +418,29 @@ class Trainer(object):
                     ydata = target_dataset[k:k+self.batch_size,:]
                     
 
-                # forward pass
+                #forward pass
                 result = self.network(xdata)
-                print("results shape", result)
-                
-                #compute loss (is it better to slice every time or to take temporary variable?)
-                loss = np.array(self._loss_layer(result, ydata))
 
-                print("loss shape", loss)
-               #backward pass
-                self.network.backward(loss)
-               
-               #gradient descent
+                #compute loss (is it better to slice every time or to take temporary variable?)
+                loss = self._loss_layer(result, ydata)
+                grad_loss = self._loss_layer.backward()
+                
+                #backward pass
+                self.network.backward(grad_loss)
+                
+                #gradient descent
                 self.network.update_params(self.learning_rate)
 
+                #decrease learning rate if no significant change occured between 50 epochs
+                if self.adap_learn and i%50 and k is 0:
+                    lossList.append(loss)
+                    if (abs((lossList[-1]-lossList[-2])/lossList[-1]))<0.01:
+                        self.learning_rate = self.learning_rate/1.2
+                
                 #update counter
                 k = k+self.batch_size
-        
-        
+                
+            
     def eval_loss(self, input_dataset, target_dataset):
         """
         Function that evaluate the loss function for given data.
@@ -543,7 +539,6 @@ def example_main():
     y = dat[:, 4:]
  
     split_idx = int(0.8 * len(x))
-
     x_train = x[:split_idx]
     y_train = y[:split_idx]
     x_val = x[split_idx:]
@@ -552,7 +547,7 @@ def example_main():
 
     input_dim = 4
     neurons = [16, 3]
-    activations = ["relu", "relu"]
+    activations = ["relu", "identity"]
     net = MultiLayerNetwork(input_dim, neurons, activations)
 
     dat = np.loadtxt("iris.dat")
@@ -561,16 +556,14 @@ def example_main():
     x = dat[:, :4]
     y = dat[:, 4:]
 
-    #print("x",x)
-    #print("y",y)
     split_idx = int(0.8 * len(x))
 
-    x_train = x[:split_idx]
-    y_train = y[:split_idx]
-    x_val = x[split_idx:]
-    y_val = y[split_idx:]
+    x_train = np.array(x[:split_idx])
+    y_train = np.array(y[:split_idx])
+    x_val = np.array(x[split_idx:])
+    y_val = np.array(y[split_idx:])
 
-    #print(y_train)
+    
     prep_input = Preprocessor(x_train)
 
     x_train_pre = prep_input.apply(x_train)
@@ -580,7 +573,7 @@ def example_main():
         network=net,
         batch_size=8,
         nb_epoch=1000,
-        learning_rate=0.01,
+        learning_rate=0.02,
         loss_fun="cross_entropy",
         shuffle_flag=True,
     )
