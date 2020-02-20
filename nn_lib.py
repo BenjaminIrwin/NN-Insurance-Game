@@ -480,9 +480,11 @@ class Preprocessor(object):
             - data {np.ndarray} dataset used to determined the parameters for
             the normalization.
         """
-        
-        self.max_values = np.amax(data,axis=0)
-        
+        if(len(data.shape) == 2):
+            self.max_values = np.amax(data,axis=0)
+        else:
+            self.max_values = np.amax(data)
+            
     def apply(self, data):
         """
         Apply the pre-processing operations to the provided dataset.
