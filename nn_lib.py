@@ -480,7 +480,7 @@ class Preprocessor(object):
             - data {np.ndarray} dataset used to determined the parameters for
             the normalization.
         """
-
+        
         self.max_values = np.amax(data,axis=0)
         
     def apply(self, data):
@@ -493,8 +493,10 @@ class Preprocessor(object):
         Returns:
             {np.ndarray} normalized dataset.
         """
-        return data/self.max_values[None,:]
-        
+        if(len(data.shape) == 2):
+            return data/self.max_values[None,:]
+        else:
+            return data/self.max_values
         
     def revert(self, data):
         """
@@ -602,6 +604,8 @@ def example_main():
     x = np.arange(4).reshape(2,2)
     y = np.arange(2).reshape(2)
     z = Trainer.shuffle(x,y)
+    prep_input = Preprocessor(y)
+    y_val = prep_input.apply(y)
     
 if __name__ == "__main__":
     example_main()
