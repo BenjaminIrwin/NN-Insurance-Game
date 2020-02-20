@@ -1,13 +1,26 @@
 import numpy as np
 import pickle
 import matplotlib.pyplot as plt
+import copy
 
 import random
 from sklearn.model_selection import train_test_split
+from sklearn.utils import shuffle
+from sklearn import metrics
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+
+def akkuracy(model, data_x, data_y):
+    # data_x and data_y are numpy array-of-arrays matrices
+    X = torch.Tensor(data_x)
+    Y = torch.ByteTensor(data_y)   # a Tensor of 0s and 1s
+    oupt = model(X)            # a Tensor of floats
+    pred_y = oupt >= 0.5       # a Tensor of 0s and 1s
+    num_correct = torch.sum(Y==pred_y)  # a Tensor
+    acc = (num_correct.item() * 100.0 / len(data_y))  # scalar
+    return acc
 
 
 class InsuranceNN(nn.Module):
@@ -16,14 +29,14 @@ class InsuranceNN(nn.Module):
 
         self.apply_layers = nn.Sequential(
             # 2 fully connected hidden layers of 8 neurons goes to 1
-            # 4 - (8 - 8) - 1
-            nn.Linear(9, 8),
+            # 9 - (100 - 10) - 1
+            nn.Linear(9, 100),
             nn.LeakyReLU(inplace=True),
             nn.Dropout(),
-            nn.Linear(8, 8),
+            nn.Linear(100, 10),
             nn.LeakyReLU(inplace=True),
             nn.Dropout(),
-            nn.Linear(8, 1),
+            nn.Linear(10, 1),
             nn.Sigmoid()
         )
 
@@ -32,15 +45,67 @@ class InsuranceNN(nn.Module):
         x = self.apply_layers(x)
         return x.view(len(x))
 
+def weighted_binary_cross_entropy(sigmoid_x, targets, pos_weight, weight=None, size_average=True, reduce=True):
+    """
+    Args:
+        sigmoid_x: predicted probability of size [N,C], N sample and C Class. Eg. Must be in range of [0,1], i.e. Output from Sigmoid.
+        targets: true value, one-hot-like vector of size [N,C]
+        pos_weight: Weight for postive sample
+    """
+    if not (targets.size() == sigmoid_x.size()):
+        raise ValueError("Target size ({}) must be the same as input size ({})".format(targets.size(), sigmoid_x.size()))
 
-class Batch_Maker:
-    def __init__(self, num_items, batch_size, seed = 0):
-        self.indices = np.arange(num_items)
-        self.num_items = num_items
-        self.batch_size = batch_size
-        self.rnd = np.random.RandomState(seed)
-        self.rnd.shuffle(self.indices)
-        self.ptr = 0
+    loss = -pos_weight* targets * sigmoid_x.log() - (1-targets)*(1-sigmoid_x).log()
+
+    if weight is not None:
+        loss = loss * weight
+
+    if not reduce:
+        return loss
+    elif size_average:
+        return loss.mean()
+    else:
+        return loss.sum()
+
+class WeightedBCELoss(nn.Module):
+    def __init__(self, pos_weight=1, weight=None, PosWeightIsDynamic= False, WeightIsDynamic= False, size_average=True, reduce=True):
+        """
+        Args:
+            pos_weight = Weight for postive samples. Size [1,C]
+            weight = Weight for Each class. Size [1,C]
+            PosWeightIsDynamic: If True, the pos_weight is computed on each batch. If pos_weight is None, then it remains None.
+            WeightIsDynamic: If True, the weight is computed on each batch. If weight is None, then it remains None.
+        """
+        super().__init__()
+
+        self.register_buffer('weight', weight)
+        self.register_buffer('pos_weight', pos_weight)
+        self.size_average = size_average
+        self.reduce = reduce
+        self.PosWeightIsDynamic = PosWeightIsDynamic
+
+    def forward(self, input, target):
+        # pos_weight = Variable(self.pos_weight) if not isinstance(self.pos_weight, Variable) else self.pos_weight
+        if self.PosWeightIsDynamic:
+            positive_counts = target.sum(dim=0)
+            nBatch = len(target)
+            self.pos_weight = (nBatch - positive_counts)/(positive_counts +1e-5)
+
+        if self.weight is not None:
+            # weight = Variable(self.weight) if not isinstance(self.weight, Variable) else self.weight
+            return weighted_binary_cross_entropy(input, target,
+                                                 self.pos_weight,
+                                                 weight=self.weight,
+                                                 size_average=self.size_average,
+                                                 reduce=self.reduce)
+        else:
+            return weighted_binary_cross_entropy(input, target,
+                                                 self.pos_weight,
+                                                 weight=None,
+                                                 size_average=self.size_average,
+                                                 reduce=self.reduce)
+
+
 
     def __iter__(self):
         return self
@@ -83,7 +148,7 @@ class ClaimClassifier():
         num_att = len(data_set[0])  # number of parameters
 
         x = np.array(data_set[:, :(num_att-2)], dtype=np.float32)
-        y = np.array(data_set[:, (num_att-1)], dtype=np.float)
+        y = np.array(data_set[:, (num_att-1)], dtype=np.float32)
 
         return x, y
 
@@ -170,6 +235,153 @@ class ClaimClassifier():
 
         plt.savefig("violin.pdf", bbox_inches='tight')
 
+    def WeightedTrain(self, model, train_x, train_y, test_x, test_y, use_gpu, with_weight = True):
+        # Weighted version of train
+        # https://discuss.pytorch.org/t/unclear-about-weighted-bce-loss/21486
+        # https://github.com/pytorch/pytorch/issues/5660
+        if with_weight:
+            pos_weight = torch.Tensor([(900 / 100)])
+            criterion = WeightedBCELoss(pos_weight)
+        else:
+            criterion = nn.BCELoss()
+
+
+        #optimiser = optim.AdamW(model.parameters(), lr=0.001)
+        #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser)
+
+        optimiser = torch.optim.AdamW(model.parameters(), lr=0.001)
+        #scheduler = torch.optim.lr_scheduler.OneCycleLR(optimiser, max_lr=0.001, steps_per_epoch=900,epochs=50)
+        num_epochs = 50
+
+        for epoch in range(num_epochs):
+            shuffled_train_x, shuffled_train_y = shuffle(train_x, train_y,
+                                                         random_state=0)
+
+            x_batches = torch.split(shuffled_train_x, 20, dim=0)
+            y_batches = torch.split(shuffled_train_y, 20, dim=0)
+            print(len(x_batches))
+
+            for param_group in optimiser.param_groups:
+                print(param_group['lr'])
+
+            for batch_i in range(len(x_batches)):
+
+                batch_data = x_batches[batch_i]
+                batch_label = y_batches[batch_i]
+
+                if use_gpu:
+                    batch_data = batch_data.cuda()
+                    batch_label = batch_label.cuda()
+
+                # Perform gradient decent algorithm to reduce loss
+                optimiser.zero_grad()
+                batch_output = model(batch_data)
+
+                # Calculate loss by comparing ground truth to predictions on batch
+                batch_loss = criterion(batch_output, batch_label)
+                batch_loss.backward()
+                optimiser.step()
+                #scheduler.step()
+
+           # scheduler.step(batch_loss)
+            print("Epoch = %d, Loss = %f" % (epoch + 1, batch_loss.item()))
+            acc = akkuracy(model, test_x, test_y)
+            print("Accuracy = ", acc)
+
+        return model
+
+
+
+    def UpsampleTrain(self, model, train_x, train_y, test_x, test_y, use_gpu):
+
+        loss_list = []
+        criterion = nn.BCELoss()
+        # lambda2 = lambda epoch: 0.96**epoch
+        #optimiser = optim.Adam(model.parameters(), lr=1)
+        #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser)
+        # Separate into positive and negative samples
+
+        optimiser = torch.optim.SGD(model.parameters(), lr=0.0001)
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimiser, max_lr=0.1,
+                                                        steps_per_epoch=140,
+                                                        epochs=500)
+
+
+        pos_train_y = []
+        pos_train_x = np.empty((0,9), np.float32)
+        neg_train_y = []
+        neg_train_x = np.empty((0,9), np.float32)
+        for i in range(train_y.shape[0]):
+            if train_y[i] == 1:
+                pos_train_y.append(train_y[i])
+                pos_train_x = np.vstack((pos_train_x, train_x[i]))
+            else:
+                neg_train_y.append(train_y[i])
+                neg_train_x = np.vstack((neg_train_x, train_x[i]))
+
+        neg_train_y = np.array(neg_train_y, dtype=np.float32)
+        pos_train_y = np.array(pos_train_y, dtype=np.float32)
+        print(len(pos_train_y))
+        print(pos_train_x.shape)
+
+        print(len(neg_train_y))
+
+        neg_train_x, neg_train_y = shuffle(neg_train_x, neg_train_y)
+        num_epochs = 500
+        for epoch in range(num_epochs):
+            acc = akkuracy(model, test_x, test_y)
+            print("-2: ", acc)
+
+            neg_train_x, neg_train_y = shuffle(neg_train_x, neg_train_y)
+
+            # 2004, 2508, 3012
+            train_x_new = np.concatenate((neg_train_x[:1668], pos_train_x))
+            train_y_new = np.concatenate((neg_train_y[:1668], pos_train_y))
+
+            # concat first 1668 of this matrix to pos vals then proceed as if theyr're train_x and train_y
+            shuffled_train_x, shuffled_train_y = shuffle(train_x_new, train_y_new,
+                                                         random_state=0)
+            shuffled_train_x = torch.from_numpy(shuffled_train_x)
+            shuffled_train_y = torch.from_numpy(shuffled_train_y)
+
+            x_batches = torch.split(shuffled_train_x, 24, dim=0)
+            y_batches = torch.split(shuffled_train_y, 24, dim=0)
+
+            for param_group in optimiser.param_groups:
+                print(param_group['lr'])
+
+            for batch_i in range(len(x_batches)):
+
+                batch_data = x_batches[batch_i]
+                batch_label = y_batches[batch_i]
+
+                if use_gpu:
+                    batch_data = batch_data.cuda()
+                    batch_label = batch_label.cuda()
+
+                # Perform gradient decent algorithm to reduce loss
+                optimiser.zero_grad()
+                batch_output = model(batch_data)
+
+                # Calculate loss by comparing ground truth to predictions on batch
+                batch_loss = criterion(batch_output, batch_label)
+                batch_loss.backward()
+                optimiser.step()
+                scheduler.step()
+            loss_list.append(batch_loss.item())
+
+            #scheduler.step(batch_loss)
+
+            print("Epoch = %d, Loss = %f" % (epoch + 1, batch_loss.item()))
+            acc = akkuracy(model, test_x, test_y)
+            print("Accuracy1 = ", acc)
+            acc = akkuracy(model, test_x, test_y)
+            print("Accuracy2 = ", acc)
+
+        acc = akkuracy(model, test_x, test_y)
+        print("Accuracy3 = ", acc)
+        return model
+
 
     def fit(self, X_raw, y_raw):
         """Classifier training function.
@@ -197,13 +409,14 @@ class ClaimClassifier():
         # Split data into training and test data
         train_x, test_x, train_y, test_y = train_test_split(X_clean, y_raw,
                                                             test_size = 0.1)
+
         print((train_x.shape, train_y.shape), (test_x.shape, test_y.shape))
 
         train_x = torch.from_numpy(train_x)
         #train_x = train_x.view(-1, 9)
         train_y = torch.from_numpy(train_y)
-        print(train_x.shape, train_y.shape)
-        print(train_y.type())
+        #print(train_x.shape, train_y.shape)
+        #print(train_y.type())
         model = InsuranceNN()
         print(model)
         print(model(train_x).shape)
@@ -216,72 +429,62 @@ class ClaimClassifier():
         else:
             print('Using CPU...')
 
-        criterion = nn.BCELoss()
-        optimiser = optim.AdamW(model.parameters(), lr=0.001)
+        model = self.WeightedTrain(model, train_x, train_y, test_x, test_y, use_gpu)
+        #model = self.UpsampleTrain(model, train_x, train_y, test_x, test_y, use_gpu)
 
-        n_iterations = 30000
-        batch_size = 64
-
-        for iteration in range(n_iterations):
-            batch_data = torch.empty(batch_size, 9, dtype=torch.float)
-            batch_label = torch.empty(batch_size, dtype=torch.float)
-            # Fill random batch
-            for i in range(batch_size):
-                index = random.randint(0, train_x.shape[0] - 1)
-                batch_data[i] = train_x[index]
-                batch_label[i] = train_y[index]
-
-            batch_data = torch.autograd.Variable(batch_data)
-            batch_label = torch.autograd.Variable(batch_label)
-            batch_data = batch_data.type(torch.FloatTensor)
-            batch_label = batch_label.type(torch.FloatTensor)
-
-            if use_gpu:
-                batch_data = batch_data.cuda()
-                batch_label = batch_label.cuda()
-
-            # Perform gradient decent algorithm to reduce loss
-            optimiser.zero_grad()
-            batch_output = model(batch_data)
-            batch_label = batch_label.view(batch_size)
-            # Calculate loss by comparing ground truth to predictions on batch
-            batch_loss = criterion(batch_output, batch_label)
-            batch_loss.backward()
-            optimiser.step()
-
-            if (iteration + 1) % 100 == 0:
-                print("Iteration = %d, Loss = %f" % (
-                iteration + 1, batch_loss.item()))
-
-
+        acc = akkuracy(model, test_x, test_y)
+        print("1: ", acc)
         # --------------------- TEST ----------------------
-
+        self.save_model(model)
+        print("1: ", acc)
+        #model = load_model()
         model.eval()
-
+        acc = akkuracy(model, test_x, test_y)
+        print("1: ", acc)
         predictions = []
-        test_x = torch.from_numpy(test_x)
 
+
+        test_x = torch.from_numpy(test_x)
         for sample_i in range(test_x.shape[0]):
             test_sample = torch.autograd.Variable(test_x[sample_i:sample_i + 1].clone())
             test_sample = test_sample.type(torch.FloatTensor)
 
             if use_gpu:
-                sample_data = test_sample.cuda()
+                test_sample = test_sample.cuda()
 
             sample_out = model(test_sample)
-            pred = torch.round(sample_out)
-            predictions.append(pred)
-            if (sample_i + 1) % 100 == 0:
+            #print(sample_out)
+            if sample_out >= 0.5:
+                predictions.append(1)
+            else:
+                predictions.append(0)
+
+            if (sample_i + 1) % 500 == 0:
                 print("Total tested = %d" % (sample_i + 1))
 
         # -------------------- EVALUATE -------------------
-
+        acc = akkuracy(model, test_x, test_y)
+        print("2: ", acc)
         count = 0
+        test_y.astype(int)
         for i in range(len(predictions)):
+            test_y[i] = int(test_y[i])
+            predictions[i] = int(predictions[i])
+
             if predictions[i] == test_y[i]:
                 count += 1
 
-        print("Test Accuracy = ", count * 100 / 10000, "%")
+        print("Test Accuracy = ", count * 100 / 2000, "%")
+        acc = akkuracy(model, test_x, test_y)
+        print("Accuracy = ", acc)
+        print(predictions)
+        print(test_y)
+
+        labels = ['No Accident', 'Accident']
+        confusion = metrics.confusion_matrix(test_y, predictions, normalize='true')
+        metrics.ConfusionMatrixDisplay(confusion, labels).plot()
+        plt.gcf().set_size_inches(5, 5)
+        plt.show()
 
     def predict(self, X_raw):
         """Classifier probability prediction function.
@@ -319,10 +522,10 @@ class ClaimClassifier():
         """
         pass
 
-    def save_model(self):
+    def save_model(self, model):
         # Please alter this file appropriately to work in tandem with your load_model function below
         with open('part2_claim_classifier.pickle', 'wb') as target:
-            pickle.dump(self, target)
+            pickle.dump(model, target)
 
 
 def load_model():
@@ -343,10 +546,13 @@ def ClaimClassifierHyperParameterSearch():
 
     return  # Return the chosen hyper parameters
 
-test = ClaimClassifier()
-x, y = test.load_data("part2_training_data.csv")
 
-x_clean = test._preprocessor(x)
-print(x_clean.shape)
-test.fit(x, y)
+
+if __name__ == "__main__":
+    test = ClaimClassifier()
+    x, y = test.load_data("part2_training_data.csv")
+
+    x_clean = test._preprocessor(x)
+    print(x_clean.shape)
+    test.fit(x, y)
 
