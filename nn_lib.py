@@ -362,13 +362,22 @@ class Trainer(object):
 
         Returns: 2-tuple of np.ndarray: (shuffled inputs, shuffled_targets).
         """
-        data = np.array(np.concatenate((input_dataset, target_dataset), axis=1))
+        data = np.column_stack((input_dataset, target_dataset))
         np.random.shuffle(data)
+        print(data)
+        print(data.shape)
 
         #split and return
-        xshuff = np.array(data[:,:input_dataset.shape[1]])
-        yshuff = np.array(data[:,-target_dataset.shape[1]:])
+        if(len(input_dataset.shape) == 2):
+            xshuff = data[:,:input_dataset.shape[1]]
+        else:
+            xshuff = data[:,0]
 
+        if(len(target_dataset.shape) == 2):
+            yshuff = data[:,-target_dataset.shape[1]:]
+        else:
+            yshuff = data[:,-1]
+            
         return xshuff, yshuff
 
         
@@ -544,7 +553,7 @@ def example_main():
     x_val = x[split_idx:]
     y_val = y[split_idx:]
     """
-
+    """
     input_dim = 4
     neurons = [16, 3]
     activations = ["relu", "identity"]
@@ -589,7 +598,10 @@ def example_main():
     print("targets",targets)
     accuracy = (preds == targets).mean()
     print("Validation accuracy: {}".format(accuracy))
-
+    """
+    x = np.arange(4).reshape(2,2)
+    y = np.arange(2).reshape(2)
+    z = Trainer.shuffle(x,y)
     
 if __name__ == "__main__":
     example_main()
