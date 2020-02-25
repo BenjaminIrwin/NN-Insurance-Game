@@ -693,6 +693,7 @@ class ClaimClassifier():
         # YOUR CODE HERE
 
         X_clean = self._preprocessor(X_raw)
+        self.fitted_model = load_model()
 
         X_test = torch.Tensor(X_clean)
         oupt = self.fitted_model(X_test)  # a Tensor of floats

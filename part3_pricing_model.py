@@ -4,6 +4,7 @@ import pickle
 import numpy as np
 
 import matplotlib.pyplot as plt
+import copy
 
 def fit_and_calibrate_classifier(classifier, X, y):
     # DO NOT ALTER THIS FUNCTION
@@ -169,7 +170,7 @@ class PricingModel():
             ground truth label of the sample x[index][]
         """
         # load data to single 2D array
-        data_set = np.genfromtxt(filename, dtype=float, delimiter=',', skip_header=1)
+        data_set = np.genfromtxt(filename, dtype=str, delimiter=',', skip_header=1)
 
         num_att = len(data_set[0])  # number of parameters
 
@@ -298,3 +299,19 @@ def load_model():
 
 if __name__ == "__main__":
     test = PricingModel()
+    x, y = test.load_data("part3_training_data.csv")
+    print((x[0,:]))
+
+    new_x = copy.deepcopy(x)
+    for att_i in range(x.shape[1]):
+        try:
+            float(x[0, att_i])
+            new_x = x
+        except ValueError:
+            classes = []
+            for sample_i in range(x.shape[0]):
+                if x[sample_i, att_i] not in classes:
+                    classes.append(x[sample_i, att_i])
+
+
+
