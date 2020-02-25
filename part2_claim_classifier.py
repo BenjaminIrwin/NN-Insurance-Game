@@ -614,7 +614,7 @@ class ClaimClassifier():
         # making val 17.65% of original makes it a total of 15% of original
         # data --> see separate_data( ) class method
         train_x, val_x, train_y, val_y = train_test_split(X_clean, y_raw,
-                                                            test_size = 0.1765)
+                                                            test_size = 0.17647)
 
         # Save split for later evaluation
         self.train_data = (train_x, train_y)
@@ -838,16 +838,24 @@ if __name__ == "__main__":
 
     train_data, test_data = test.separate_data(x, y)
     test.fit(train_data[0], train_data[1])
-    predictions_test = test.predict(test.test_data)
+    predictions_test = test.predict(test_data[0])
 
 
+    confusion_test = metrics.confusion_matrix(test.test_data[1], predictions_test,
+                                             normalize='true')
 
+    labels = ['No Claim', 'Claim']
+    metrics.ConfusionMatrixDisplay(confusion_test, labels).plot()
+
+    test.evaluate_architecture(True)
+    test.evaluate_architecture()
+    """
     #test.evaluate_input3(x, y)
     x_clean = test._preprocessor(x)
     #print(x_clean.shape)
     #test.fit(x, y)
     test.evaluate_input3(x, y)
-    """
+    
     data_set = np.genfromtxt("part2_training_data.csv", dtype=float, delimiter=',', skip_header=1)
     num_att = len(data_set[0])  # number of parameters
 
