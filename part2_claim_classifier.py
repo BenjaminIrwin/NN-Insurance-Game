@@ -636,7 +636,7 @@ class ClaimClassifier():
         #self.fitted_model = self.WeightedTrain(model, train_x, train_y, val_x, val_y)
         self.fitted_model = self.DownsampleTrain(model, train_x, train_y, val_x, val_y)
 
-        self.save_model(self.fitted_model)
+        self.save_model()
 
         return
 
@@ -784,10 +784,10 @@ class ClaimClassifier():
 
         return
 
-    def save_model(self, model):
+    def save_model(self):
         # Please alter this file appropriately to work in tandem with your load_model function below
         with open('part2_claim_classifier.pickle', 'wb') as target:
-            pickle.dump(model, target)
+            pickle.dump(self.fitted_model, target)
 
 
 def load_model():

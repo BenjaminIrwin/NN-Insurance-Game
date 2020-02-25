@@ -173,8 +173,8 @@ class PricingModel():
 
         num_att = len(data_set[0])  # number of parameters
 
-        x = np.array(data_set[:, :(num_att-2)], dtype=np.str)
-        y = np.array(data_set[:, (num_att-1)], dtype=np.str)
+        x = np.array(data_set[:, :(num_att-2)], dtype=str)
+        y = np.array(data_set[:, (num_att-1)], dtype=np.float)
 
         return x, y
 
@@ -297,4 +297,4 @@ def load_model():
 
 
 if __name__ == "__main__":
-    print(hi)
+    test = PricingModel()
