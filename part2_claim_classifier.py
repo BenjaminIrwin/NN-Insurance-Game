@@ -68,7 +68,7 @@ def analyse(model, data_x, data_y):
     acc = (num_correct.item() * 100.0 / len(data_y))  # scalar
     return (acc, pred_y)
 
-
+"""
 class InsuranceNN(nn.Module):
     def __init__(self):
         super(InsuranceNN, self).__init__()
@@ -90,6 +90,7 @@ class InsuranceNN(nn.Module):
     def forward(self, x):
         x = self.apply_layers(x)
         return x.view(len(x))
+"""
 
 def weighted_binary_cross_entropy(sigmoid_x, targets, pos_weight, weight=None, size_average=True, reduce=True):
     """
@@ -808,13 +809,40 @@ def ClaimClassifierHyperParameterSearch():
     return  # Return the chosen hyper parameters
 
 
+class InsuranceNN(nn.Module):
+    def __init__(self):
+        super(InsuranceNN, self).__init__()
+
+        self.apply_layers = nn.Sequential(
+            # 2 fully connected hidden layers of 8 neurons goes to 1
+            # 9 - (100 - 10) - 1
+            nn.Linear(9, 100),
+            nn.LeakyReLU(inplace=True),
+            nn.Dropout(),
+            nn.Linear(100, 10),
+            nn.LeakyReLU(inplace=True),
+            nn.Dropout(),
+            nn.Linear(10, 1),
+            nn.Sigmoid()
+        )
+
+    # Defining the forward pass
+    def forward(self, x):
+        x = self.apply_layers(x)
+        return x.view(len(x))
 
 if __name__ == "__main__":
 
     test = ClaimClassifier()
     x, y = test.load_data("part2_training_data.csv")
 
-    test.evaluate_input3(x, y)
+    train_data, test_data = test.separate_data(x, y)
+    test.fit(train_data[0], train_data[1])
+    predictions_test = test.predict(test.test_data)
+
+
+
+    #test.evaluate_input3(x, y)
     x_clean = test._preprocessor(x)
     #print(x_clean.shape)
     #test.fit(x, y)
