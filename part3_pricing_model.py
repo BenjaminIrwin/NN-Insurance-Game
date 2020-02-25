@@ -3,6 +3,7 @@ from sklearn.model_selection import train_test_split
 import pickle
 import numpy as np
 
+import matplotlib.pyplot as plt
 
 def fit_and_calibrate_classifier(classifier, X, y):
     # DO NOT ALTER THIS FUNCTION
@@ -153,8 +154,147 @@ class PricingModel():
             pickle.dump(self, target)
 
 
+    # -------- NEW FUNCTIONS -----------
+
+    def load_data(self, filename):
+        """
+        Function to load data from file
+        Args:
+            filename (str) - name of .txt file you are loading data from
+        Output:
+            (x, y) (tuple) - x: 2D array of training data where each row
+            corresponds to a different sample and each column corresponds to a
+            different attribute.
+                            y: 1D array where each index corresponds to the
+            ground truth label of the sample x[index][]
+        """
+        # load data to single 2D array
+        data_set = np.genfromtxt(filename, dtype=float, delimiter=',', skip_header=1)
+
+        num_att = len(data_set[0])  # number of parameters
+
+        x = np.array(data_set[:, :(num_att-2)], dtype=np.str)
+        y = np.array(data_set[:, (num_att-1)], dtype=np.str)
+
+        return x, y
+
+
+    def set_axis_style(self, ax, labels):
+        ax.get_xaxis().set_tick_params(direction='out')
+        ax.xaxis.set_ticks_position('bottom')
+        ax.set_xticks(np.arange(1, len(labels) + 1))
+        ax.set_xticklabels(labels)
+        ax.set_xlim(0.25, len(labels) + 0.75)
+        ax.set_xlabel('Sample name')
+
+    def evaluate_input1(self, X_raw):
+        """
+        Function to evaluate data loaded from file
+
+        """
+
+        attributes = []
+        for i in range(np.shape(X_raw)[1]):
+            attributes.append(X_raw[:, i])
+
+
+        fig, ax1 = plt.subplots(figsize=(11, 4))
+
+        # type of plot
+        ax1.boxplot(attributes)
+        labels = ['drv_age1', 'vh_age', 'vh_cyl', 'vh_din', 'pol_bonus', 'vh_sl_b',
+                  'vh_sl_e', 'vh_value', 'vh_speed']
+
+        self.set_axis_style(ax1, labels)
+
+        plt.subplots_adjust(bottom=0.15, wspace=0.05)
+        # plt.show()
+        plt.xlabel("Attribute Type")
+        plt.ylabel("Attribute Value")
+
+        plt.savefig("box.pdf", bbox_inches='tight')
+
+        ####################
+
+        plt.cla()
+        ax1.violinplot(attributes)
+
+        labels = ['drv_age1', 'vh_age', 'vh_cyl', 'vh_din', 'pol_bonus',
+                  'vh_sl_b', 'vh_sl_e', 'vh_value', 'vh_speed']
+
+        self.set_axis_style(ax1, labels)
+
+        plt.subplots_adjust(bottom=0.15, wspace=0.05)
+        plt.xlabel("Attribute Type")
+        plt.ylabel("Attribute Value")
+
+
+        plt.savefig("violin.pdf", bbox_inches='tight')
+
+    def evaluate_input2(self, x, y):
+        """
+        Function to evaluate data loaded from file
+
+        """
+
+        # Separate positive and negative results
+
+        (neg_x, neg_y), (pos_x, pos_y) = self.separate_pos_neg(x, y)
+        attributes1 = []
+        attributes2 = []
+        for i in range(np.shape(neg_x)[1]):
+            attributes1.append(neg_x[:, i])
+            attributes2.append(pos_x[:, i])
+
+        fig, axs = plt.subplots(2, figsize=(11, 11))
+
+        # type of plot
+        axs[0].boxplot(attributes1)
+        axs[1].boxplot(attributes2)
+        labels = ['drv_age1', 'vh_age', 'vh_cyl', 'vh_din', 'pol_bonus', 'vh_sl_b',
+                  'vh_sl_e', 'vh_value', 'vh_speed']
+
+        self.set_axis_style(axs[0], labels)
+        self.set_axis_style(axs[1], labels)
+
+        # plt.show()
+        axs[0].set(xlabel="Attribute Type", ylabel="Attribute Value")
+        axs[0].set_title("No Claim")
+        axs[1].set(xlabel="Attribute Type", ylabel="Attribute Value")
+        axs[1].set_title("Claim")
+
+        plt.subplots_adjust(bottom=0.15, wspace=0.05)
+        plt.savefig("compare_box.pdf", bbox_inches='tight')
+
+    def evaluate_input3(self, x, y):
+        """
+        Function to evaluate data loaded from file
+
+        """
+
+        # Separate positive and negative results
+
+        (neg_x, neg_y), (pos_x, pos_y) = self.separate_pos_neg(x, y)
+        attributes1 = []
+        attributes2 = []
+        difference = []
+        for i in range(np.shape(neg_x)[1]):
+            attributes1.append(np.mean(neg_x[:, i]))
+            attributes2.append(np.mean(pos_x[:, i]))
+            difference.append(((attributes2[i]-attributes1[i])*100)/attributes1[i])
+
+
+        print(attributes1)
+        print(attributes2)
+        print(difference)
+
+
 def load_model():
     # Please alter this section so that it works in tandem with the save_model method of your class
     with open('part3_pricing_model.pickle', 'rb') as target:
         trained_model = pickle.load(target)
     return trained_model
+
+
+if __name__ == "__main__":
+    print(hi)

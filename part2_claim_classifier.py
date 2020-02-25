@@ -69,9 +69,9 @@ def analyse(model, data_x, data_y):
     return (acc, pred_y)
 
 """
-class InsuranceNN(nn.Module):
+class Insurance_NN(nn.Module):
     def __init__(self):
-        super(InsuranceNN, self).__init__()
+        super(Insurance_NN, self).__init__()
 
         self.apply_layers = nn.Sequential(
             # 2 fully connected hidden layers of 8 neurons goes to 1
@@ -627,7 +627,7 @@ class ClaimClassifier():
         val_x = torch.from_numpy(val_x)
         val_y = torch.from_numpy(val_y)
 
-        model = InsuranceNN()
+        model = Insurance_NN()
         print(model)
         print(model(train_x).shape)
 
@@ -809,9 +809,9 @@ def ClaimClassifierHyperParameterSearch():
     return  # Return the chosen hyper parameters
 
 
-class InsuranceNN(nn.Module):
+class Insurance_NN(nn.Module):
     def __init__(self):
-        super(InsuranceNN, self).__init__()
+        super(Insurance_NN, self).__init__()
 
         self.apply_layers = nn.Sequential(
             # 2 fully connected hidden layers of 8 neurons goes to 1
