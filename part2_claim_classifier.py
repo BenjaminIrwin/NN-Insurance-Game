@@ -174,7 +174,11 @@ class ClaimClassifier():
         Feel free to alter this as you wish, adding instance variables as
         necessary. 
         """
-        pass
+        self.fitted_model = 0;
+
+        self.train_data = 0;
+        self.test_data = 0;
+        self.val_data = 0;
 
     def load_data(self, filename):
         """
@@ -359,7 +363,7 @@ class ClaimClassifier():
         print(difference)
 
 
-    def WeightedTrain(self, model, train_x, train_y, val_x, val_y, use_gpu, with_weight = True):
+    def WeightedTrain(self, model, train_x, train_y, val_x, val_y, with_weight = True):
         # Weighted version of train
         # https://discuss.pytorch.org/t/unclear-about-weighted-bce-loss/21486
         # https://github.com/pytorch/pytorch/issues/5660
@@ -406,10 +410,6 @@ class ClaimClassifier():
 
                 batch_data = x_batches[batch_i]
                 batch_label = y_batches[batch_i]
-
-                if use_gpu:
-                    batch_data = batch_data.cuda()
-                    batch_label = batch_label.cuda()
 
                 # Forward pass: compute predicted outputs
                 optimiser.zero_grad()
@@ -461,7 +461,7 @@ class ClaimClassifier():
 
 
 
-    def DownsampleTrain(self, model, train_x, train_y, val_x, val_y, use_gpu):
+    def DownsampleTrain(self, model, train_x, train_y, val_x, val_y):
 
         loss_list = []
         criterion = nn.BCELoss()
@@ -523,10 +523,6 @@ class ClaimClassifier():
                 batch_data = x_batches[batch_i]
                 batch_label = y_batches[batch_i]
 
-                if use_gpu:
-                    batch_data = batch_data.cuda()
-                    batch_label = batch_label.cuda()
-
                 # Perform gradient decent algorithm to reduce loss
                 optimiser.zero_grad()
                 batch_output = model(batch_data)
@@ -573,6 +569,23 @@ class ClaimClassifier():
         return model
 
 
+    def separate_data(self, X_raw, Y_raw):
+        """
+        Separate data into training and test data in 85:15 ratio. The training
+        data is then further partitioned to make validation set in fit( )
+        class method, resulting in 70:15:15 split of train:validation:test
+        data.
+        """
+
+        train_x, test_x, train_y, test_y = train_test_split(X_raw, Y_raw,
+                                                              test_size=0.15)
+        # Save split for evaluation later
+        self.test_data = (self._preprocessor(test_x), test_y)
+
+        return (train_x, train_y), (test_x, test_y)
+
+
+
     def fit(self, X_raw, y_raw):
         """Classifier training function.
 
@@ -596,14 +609,17 @@ class ClaimClassifier():
         # YOUR CODE HERE
         X_clean = self._preprocessor(X_raw)
 
-        # Split data into training and test data
-        train_x, inter_x, train_y, inter_y = train_test_split(X_clean, y_raw,
-                                                            test_size = 0.3)
+        # Split data into training and val
+        # making val 17.65% of original makes it a total of 15% of original
+        # data --> see separate_data( ) class method
+        train_x, val_x, train_y, val_y = train_test_split(X_clean, y_raw,
+                                                            test_size = 0.1765)
 
-        val_x, test_x, val_y, test_y = train_test_split(inter_x, inter_y,
-                                                             test_size=0.5)
+        # Save split for later evaluation
+        self.train_data = (train_x, train_y)
+        self.val_data = (val_x, val_y)
 
-        print((train_x.shape, train_y.shape), (test_x.shape, test_y.shape), (val_x.shape, val_y.shape))
+        print((train_x.shape, train_y.shape), (val_x.shape, val_y.shape))
 
         train_x = torch.from_numpy(train_x)
         train_y = torch.from_numpy(train_y)
@@ -615,18 +631,14 @@ class ClaimClassifier():
         print(model(train_x).shape)
 
         model.train()
-        use_gpu = torch.cuda.is_available()
-        if use_gpu:
-            model = model.cuda()
-            print('Using GPU...')
-        else:
-            print('Using CPU...')
 
-        #model = self.WeightedTrain(model, train_x, train_y, val_x, val_y, use_gpu)
-        model = self.DownsampleTrain(model, train_x, train_y, val_x, val_y, use_gpu)
+        #self.fitted_model = self.WeightedTrain(model, train_x, train_y, val_x, val_y)
+        self.fitted_model = self.DownsampleTrain(model, train_x, train_y, val_x, val_y)
 
-        # --------------------- TEST ----------------------
-        self.save_model(model)
+        self.save_model(self.fitted_model)
+
+        return
+
         #model = load_model()
         model.eval()
 
@@ -679,9 +691,46 @@ class ClaimClassifier():
 
         # YOUR CODE HERE
 
+        X_clean = self._preprocessor(X_raw)
+
+        X_test = torch.Tensor(X_clean)
+        oupt = self.fitted_model(X_test)  # a Tensor of floats
+        pred_y = oupt >= 0.5  # a Tensor of 0s and 1s
+
+        return pred_y.numpy()
+
+        # -------------------- EVALUATE -------------------
+        acc1 = analyse(model, train_x, train_y.numpy())
+        acc2 = analyse(model, val_x, val_y.numpy())
+        acc3 = analyse(model, test_x, test_y)
+        print("Train Accuracy = ", acc1[0])
+        print("Validation Accuracy = ", acc2[0])
+        print("Test Accuracy = ", acc3[0])
+
+        labels = ['No Accident', 'Accident']
+
+        f, (ax1, ax2, ax3) = plt.subplots(1, 3)
+        confusion1 = metrics.confusion_matrix(train_y.numpy(), acc1[1].numpy(),
+                                              normalize='true')
+        print(confusion1)
+        confusion2 = metrics.confusion_matrix(val_y.numpy(), acc2[1].numpy(),
+                                              normalize='true')
+        confusion3 = metrics.confusion_matrix(test_y, acc3[1].numpy(),
+                                              normalize='true')
+
+        metrics.ConfusionMatrixDisplay(confusion1, labels).plot(ax=ax1)
+        ax1.set_title("Training Set")
+        metrics.ConfusionMatrixDisplay(confusion2, labels).plot(ax=ax2)
+        ax2.set_title("Validation Set")
+        metrics.ConfusionMatrixDisplay(confusion3, labels).plot(ax=ax3)
+        ax3.set_title("Test Set")
+
+        plt.gcf().set_size_inches(15, 5)
+        plt.show()
+
         return  # YOUR PREDICTED CLASS LABELS
 
-    def evaluate_architecture(self):
+    def evaluate_architecture(self, with_test = False):
         """Architecture evaluation utility.
 
         Populate this function with evaluation utilities for your
@@ -690,7 +739,49 @@ class ClaimClassifier():
         You can use external libraries such as scikit-learn for this
         if necessary.
         """
-        pass
+        train_x, train_y = self.test_data
+        val_x, val_y = self.val_data
+
+        # Calculate and print accuracies based on model predictions
+        acc1 = analyse(self.fitted_model, train_x, train_y)
+        acc2 = analyse(self.fitted_model, val_x, val_y)
+        print("Train Accuracy = ", acc1[0])
+        print("Validation Accuracy = ", acc2[0])
+
+        labels = ['No Claim', 'Claim']
+
+        if with_test:
+            test_x, test_y = self.test_data
+            acc3 = analyse(self.fitted_model, test_x, test_y)
+            print("Test Accuracy = ", acc3[0])
+
+            f, (ax1, ax2, ax3) = plt.subplots(1, 3)
+            confusion_test = metrics.confusion_matrix(test_y, acc3[1].numpy(),
+                                                  normalize='true')
+            # Plot confusion for test data
+            metrics.ConfusionMatrixDisplay(confusion_test, labels).plot(ax=ax3)
+            ax3.set_title("Test Set")
+            plot_width = 15
+        else:
+            f, (ax1, ax2) = plt.subplots(1, 2)
+            plot_width = 10
+
+        # Construct training and validation normalised confusion matricies
+        confusion_train = metrics.confusion_matrix(train_y, acc1[1].numpy(),
+                                              normalize='true')
+        confusion_val = metrics.confusion_matrix(val_y, acc2[1].numpy(),
+                                              normalize='true')
+
+        # Plot training and validation set confusion matricies
+        metrics.ConfusionMatrixDisplay(confusion_train, labels).plot(ax=ax1)
+        ax1.set_title("Training Set")
+        metrics.ConfusionMatrixDisplay(confusion_val, labels).plot(ax=ax2)
+        ax2.set_title("Validation Set")
+
+        plt.gcf().set_size_inches(plot_width, 5)
+        plt.show()
+
+        return
 
     def save_model(self, model):
         # Please alter this file appropriately to work in tandem with your load_model function below
