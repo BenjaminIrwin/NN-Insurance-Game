@@ -693,7 +693,7 @@ class ClaimClassifier():
         # YOUR CODE HERE
 
         X_clean = self._preprocessor(X_raw)
-        self.fitted_model = load_model()
+        self.fitted_model = load_model().fitted_model
 
         X_test = torch.Tensor(X_clean)
         oupt = self.fitted_model(X_test)  # a Tensor of floats
@@ -788,7 +788,7 @@ class ClaimClassifier():
     def save_model(self):
         # Please alter this file appropriately to work in tandem with your load_model function below
         with open('part2_claim_classifier.pickle', 'wb') as target:
-            pickle.dump(self.fitted_model, target)
+            pickle.dump(self, target)
 
 
 def load_model():
