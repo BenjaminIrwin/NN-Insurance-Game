@@ -2,6 +2,8 @@ import numpy as np
 import pickle
 import matplotlib.pyplot as plt
 import copy
+import pandas as pd
+
 
 import random
 from sklearn.model_selection import train_test_split
@@ -194,12 +196,9 @@ class ClaimClassifier():
             ground truth label of the sample x[index][]
         """
         # load data to single 2D array
-        data_set = np.genfromtxt(filename, dtype=float, delimiter=',', skip_header=1)
-
-        num_att = len(data_set[0])  # number of parameters
-
-        x = np.array(data_set[:, :(num_att-2)], dtype=np.float32)
-        y = np.array(data_set[:, (num_att-1)], dtype=np.float32)
+        dat = pd.read_csv("part2_training_data.csv")
+        x = dat.drop(columns=["claim_amount", "made_claim"])
+        y = dat["made_claim"]
 
         return x, y
 
@@ -240,6 +239,9 @@ class ClaimClassifier():
             A clean data set that is used for training and prediction.
         """
         # YOUR CODE HERE
+
+        if not isinstance(X_raw, np.ndarray):
+            X_raw = X_raw.to_numpy(dtype=np.float)
 
         num_samples, num_att = X_raw.shape
 
@@ -420,11 +422,10 @@ class ClaimClassifier():
                 batch_loss = criterion(batch_output, batch_label)
                 batch_loss.backward()
                 optimiser.step()
+                # Signal OneCycleLR adaptive LR
                 scheduler.step()
                 train_losses.append(batch_loss.item())
 
-
-            #scheduler.step(batch_loss)
 
             # VALIDATE MODEL
             model.eval() #prep for evaluation
@@ -440,6 +441,9 @@ class ClaimClassifier():
             valid_loss = np.average(valid_losses)
             avg_train_losses.append(train_loss)
             avg_valid_losses.append(valid_loss)
+
+            # Signal ReduceLROnPlateau adapaptive LR with validation loss
+            scheduler.step(valid_loss)
 
             train_losses = []
             valid_losses = []
@@ -500,8 +504,8 @@ class ClaimClassifier():
             neg_train_x, neg_train_y = shuffle(neg_train_x, neg_train_y)
 
             # 2004, 2508, 3012
-            train_x_new = np.concatenate((neg_train_x[:int(1.2*len(pos_train_x))], pos_train_x))
-            train_y_new = np.concatenate((neg_train_y[:int(1.2*len(pos_train_x))], pos_train_y))
+            train_x_new = np.concatenate((neg_train_x[:int(1.0*len(pos_train_x))], pos_train_x))
+            train_y_new = np.concatenate((neg_train_y[:int(1.0*len(pos_train_x))], pos_train_y))
 
             # concat first 1668 of this matrix to pos vals then proceed as if theyr're train_x and train_y
             shuffled_train_x, shuffled_train_y = shuffle(train_x_new, train_y_new,
@@ -532,8 +536,8 @@ class ClaimClassifier():
                 batch_loss = criterion(batch_output, batch_label)
                 batch_loss.backward()
                 optimiser.step()
+                # Signal OneCycleLR adaptive LR
                 #scheduler.step()
-            scheduler.step(batch_loss)
 
             # VALIDATE MODEL
             model.eval()  # prep for evaluation
@@ -549,6 +553,9 @@ class ClaimClassifier():
             valid_loss = np.average(valid_losses)
             avg_train_losses.append(train_loss)
             avg_valid_losses.append(valid_loss)
+
+            # Signal ReduceLROnPlateau adapaptive LR with validation loss
+            scheduler.step(valid_loss)
 
             train_losses = []
             valid_losses = []
@@ -581,6 +588,8 @@ class ClaimClassifier():
         train_x, test_x, train_y, test_y = train_test_split(X_raw, Y_raw,
                                                               test_size=0.15)
         # Save split for evaluation later
+        if not isinstance(test_y, np.ndarray):
+            test_y = test_y.to_numpy(dtype=np.float)
         self.test_data = (self._preprocessor(test_x), test_y)
 
         return (train_x, train_y), (test_x, test_y)
@@ -608,6 +617,13 @@ class ClaimClassifier():
         # REMEMBER TO HAVE THE FOLLOWING LINE SOMEWHERE IN THE CODE
         # X_clean = self._preprocessor(X_raw)
         # YOUR CODE HERE
+        #X_raw = X_raw.to_numpy()
+        if not isinstance(y_raw, np.ndarray):
+            y_raw = y_raw.to_numpy(dtype=np.float32)
+
+        if not isinstance(X_raw, np.ndarray):
+            X_raw = X_raw.to_numpy(dtype=np.float)
+
         X_clean = self._preprocessor(X_raw)
 
         # Split data into training and val
@@ -691,6 +707,11 @@ class ClaimClassifier():
         # X_clean = self._preprocessor(X_raw)
 
         # YOUR CODE HERE
+
+        #X_raw = X_raw.to_numpy()
+
+        if not isinstance(X_raw, np.ndarray):
+            X_raw= X_raw.to_numpy(dtype=np.float)
 
         X_clean = self._preprocessor(X_raw)
         self.fitted_model = load_model().fitted_model
@@ -839,7 +860,7 @@ if __name__ == "__main__":
 
     train_data, test_data = test.separate_data(x, y)
     test.fit(train_data[0], train_data[1])
-    predictions_test = test.predict(test_data[0])
+    predictions_test = test.predict(pd.DataFrame(test_data[0]))
 
 
     confusion_test = metrics.confusion_matrix(test.test_data[1], predictions_test,
