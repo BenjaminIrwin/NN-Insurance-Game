@@ -10,6 +10,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 from sklearn import metrics
 #from pytorchtools import EarlyStopping
+from sklearn import preprocessing
 
 import torch
 import torch.nn as nn
@@ -243,16 +244,8 @@ class ClaimClassifier():
         if not isinstance(X_raw, np.ndarray):
             X_raw = X_raw.to_numpy(dtype=np.float)
 
-        num_samples, num_att = X_raw.shape
-
-        for att in range(num_att):
-            max_att = np.amax(X_raw[:, att])
-            min_att = np.amin(X_raw[:, att])
-
-            for sample in range(num_samples):
-               X_raw[sample, att] = (X_raw[sample, att] - min_att)/(max_att -
-                                                                    min_att)
-
+        min_max_scaler = preprocessing.MinMaxScaler()
+        X_raw = min_max_scaler.fit_transform(X_raw)
 
         return X_raw.astype(np.float32)
 
@@ -857,7 +850,8 @@ if __name__ == "__main__":
 
     test = ClaimClassifier()
     x, y = test.load_data("part2_training_data.csv")
-
+    print(test._preprocessor(x))
+    """
     train_data, test_data = test.separate_data(x, y)
     test.fit(train_data[0], train_data[1])
     predictions_test = test.predict(pd.DataFrame(test_data[0]))
@@ -871,6 +865,7 @@ if __name__ == "__main__":
 
     test.evaluate_architecture(True)
     test.evaluate_architecture()
+    """
     """
     #test.evaluate_input3(x, y)
     x_clean = test._preprocessor(x)

@@ -5,6 +5,10 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 import copy
+from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import OneHotEncoder
+import pandas as pd
+from sklearn import preprocessing
 
 def fit_and_calibrate_classifier(classifier, X, y):
     # DO NOT ALTER THIS FUNCTION
@@ -64,8 +68,16 @@ class PricingModel():
         """
         # =============================================================
         # YOUR CODE HERE
+        #X_raw.dropna(how="any", inplace=True)
+        X_raw = test.integer_encode(X_raw)
 
-        return  # YOUR CLEAN DATA AS A NUMPY ARRAY
+        if not isinstance(X_raw, np.ndarray):
+            X_raw = X_raw.to_numpy(dtype=np.float)
+
+        min_max_scaler = preprocessing.MinMaxScaler()
+        X_raw = min_max_scaler.fit_transform(X_raw)
+
+        return X_raw.astype(np.float32)
 
     def fit(self, X_raw, y_raw, claims_raw):
         """Classifier training function.
@@ -169,6 +181,13 @@ class PricingModel():
                             y: 1D array where each index corresponds to the
             ground truth label of the sample x[index][]
         """
+
+        dat = pd.read_csv("part3_training_data.csv")
+        dat.drop(columns=["drv_sex2"], inplace=True)
+        dat.dropna(how="any", inplace=True)
+        x = dat.drop(columns=["claim_amount", "made_claim"])
+        y = dat["made_claim"]
+        """
         # load data to single 2D array
         data_set = np.genfromtxt(filename, dtype=str, delimiter=',', skip_header=1)
 
@@ -176,6 +195,7 @@ class PricingModel():
 
         x = np.array(data_set[:, :(num_att-2)], dtype=str)
         y = np.array(data_set[:, (num_att-1)], dtype=np.float)
+        """
 
         return x, y
 
@@ -199,12 +219,13 @@ class PricingModel():
             attributes.append(X_raw[:, i])
 
 
-        fig, ax1 = plt.subplots(figsize=(11, 4))
+        fig, ax1 = plt.subplots(figsize=(20, 4))
 
         # type of plot
         ax1.boxplot(attributes)
-        labels = ['drv_age1', 'vh_age', 'vh_cyl', 'vh_din', 'pol_bonus', 'vh_sl_b',
-                  'vh_sl_e', 'vh_value', 'vh_speed']
+
+        labels = np.genfromtxt("part3_training_data.csv", dtype=str, delimiter=',',
+                                 max_rows=1)
 
         self.set_axis_style(ax1, labels)
 
@@ -213,15 +234,13 @@ class PricingModel():
         plt.xlabel("Attribute Type")
         plt.ylabel("Attribute Value")
 
-        plt.savefig("box.pdf", bbox_inches='tight')
+        plt.savefig("box_3.pdf", bbox_inches='tight')
 
         ####################
 
         plt.cla()
         ax1.violinplot(attributes)
 
-        labels = ['drv_age1', 'vh_age', 'vh_cyl', 'vh_din', 'pol_bonus',
-                  'vh_sl_b', 'vh_sl_e', 'vh_value', 'vh_speed']
 
         self.set_axis_style(ax1, labels)
 
@@ -230,7 +249,7 @@ class PricingModel():
         plt.ylabel("Attribute Value")
 
 
-        plt.savefig("violin.pdf", bbox_inches='tight')
+        plt.savefig("violin_3.pdf", bbox_inches='tight')
 
     def evaluate_input2(self, x, y):
         """
@@ -252,8 +271,10 @@ class PricingModel():
         # type of plot
         axs[0].boxplot(attributes1)
         axs[1].boxplot(attributes2)
-        labels = ['drv_age1', 'vh_age', 'vh_cyl', 'vh_din', 'pol_bonus', 'vh_sl_b',
-                  'vh_sl_e', 'vh_value', 'vh_speed']
+
+        labels = np.genfromtxt("part3_training_data.csv", dtype=str,
+                               delimiter=',',
+                               max_rows=1)
 
         self.set_axis_style(axs[0], labels)
         self.set_axis_style(axs[1], labels)
@@ -265,7 +286,7 @@ class PricingModel():
         axs[1].set_title("Claim")
 
         plt.subplots_adjust(bottom=0.15, wspace=0.05)
-        plt.savefig("compare_box.pdf", bbox_inches='tight')
+        plt.savefig("compare_box_3.pdf", bbox_inches='tight')
 
     def evaluate_input3(self, x, y):
         """
@@ -290,6 +311,46 @@ class PricingModel():
         print(difference)
 
 
+    def separate_pos_neg(self, x, y):
+
+        # Separate into positive and negative samples
+        pos_train_y = []
+        pos_train_x = np.empty((0, x.shape[1]), np.float32)
+        neg_train_y = []
+        neg_train_x = np.empty((0, x.shape[1]), np.float32)
+        for i in range(y.shape[0]):
+            if y[i] == 1:
+                pos_train_y.append(y[i])
+                pos_train_x = np.vstack((pos_train_x, x[i]))
+            else:
+                neg_train_y.append(y[i])
+                neg_train_x = np.vstack((neg_train_x, x[i]))
+
+        neg_train_y = np.array(neg_train_y, dtype=np.float32)
+        pos_train_y = np.array(pos_train_y, dtype=np.float32)
+
+        return (neg_train_x, neg_train_y), (pos_train_x, pos_train_y)
+
+
+    def integer_encode(self, x):
+        """
+        Encode all columns containing strings with unique numbers for every
+        category type
+        """
+        x = x.to_numpy(dtype=str)
+        for att_i in range(x.shape[1]):
+            try:
+                float(x[234, att_i])
+
+            except ValueError:
+                values = x[:, att_i]
+                # integer encode
+                label_encoder = LabelEncoder()
+                integer_encoded = label_encoder.fit_transform(values)
+                x[:, att_i] = integer_encoded
+        return x.astype(float)
+
+
 def load_model():
     # Please alter this section so that it works in tandem with the save_model method of your class
     with open('part3_pricing_model.pickle', 'rb') as target:
@@ -300,18 +361,27 @@ def load_model():
 if __name__ == "__main__":
     test = PricingModel()
     x, y = test.load_data("part3_training_data.csv")
-    print((x[0,:]))
+    #x.dropna(how="any", inplace=True)
+    #x = test.integer_encode(x
+    x = test._preprocessor(x)
+    y = y.to_numpy()
+    print(x.shape)
+    print(y.shape)
+    test.evaluate_input2(x, y)
 
-    new_x = copy.deepcopy(x)
-    for att_i in range(x.shape[1]):
+
+"""
+    for i in range(x.shape[0]):
         try:
-            float(x[0, att_i])
-            new_x = x
+            z = np.array(x[i,:])
+            z.astype(np.float)
+            #x_new = np.append(x_new, [z], axis=0)
         except ValueError:
-            classes = []
-            for sample_i in range(x.shape[0]):
-                if x[sample_i, att_i] not in classes:
-                    classes.append(x[sample_i, att_i])
+            print(x[i,:])
+            print(i)
+            count+=1
+    print(count)
+    
+    #print(x.shape[0] - x_new.shape[0])
 
-
-
+"""
