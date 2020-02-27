@@ -190,7 +190,7 @@ class PricingModelLinear():
         # REMEMBER TO INCLUDE ANY PRICING STRATEGY HERE.
         # For example you could scale all your prices down by a factor
 
-        return self.predict_claim_probability(X_raw) * self.y_mean
+        return self.predict_claim_probability(X_raw) * self.y_mean * 0.8
 
     def save_model(self):
         """Saves the class instance as a pickle file."""
