@@ -986,7 +986,7 @@ class Insurance_NN(nn.Module):
         self.apply_layers = nn.Sequential(
             # 2 fully connected hidden layers of 8 neurons goes to 1
             # 9/6 - (100 - 10) - 1
-            nn.Linear(6, 70),
+            nn.Linear(9, 70),
             nn.LeakyReLU(inplace=True),
             nn.Dropout(),
             nn.Linear(70, 10),
@@ -1004,7 +1004,7 @@ class Insurance_NN(nn.Module):
 if __name__ == "__main__":
 
     test = ClaimClassifier(Insurance_NN())
-    x, y = test.load_data("part2_training_data.csv", True)
+    x, y = test.load_data("part2_training_data.csv")
     #list = [1, 3, 5, 6, 7, 8]
     #print([x.columns[i] for i in list])
     #x = x.to_numpy(dtype=float)

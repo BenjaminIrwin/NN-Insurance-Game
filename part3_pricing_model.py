@@ -117,7 +117,7 @@ class PricingModel():
 
 
         X_raw.dropna(how="any", inplace=True)
-        X_raw = test.integer_encode(X_raw)
+        X_raw = self.integer_encode(X_raw)
 
         if not isinstance(X_raw, np.ndarray):
             X_raw = X_raw.to_numpy(dtype=np.float)
