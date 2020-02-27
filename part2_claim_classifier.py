@@ -379,7 +379,7 @@ class ClaimClassifier():
         # https://discuss.pytorch.org/t/unclear-about-weighted-bce-loss/21486
         # https://github.com/pytorch/pytorch/issues/5660
         if with_weight:
-            pos_weight = torch.Tensor([(800 / 100)])
+            pos_weight = torch.Tensor([(900 / 100)])
             criterion = WeightedBCELoss(pos_weight)
         else:
             criterion = nn.BCELoss()

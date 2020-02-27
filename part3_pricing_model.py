@@ -115,7 +115,7 @@ class PricingModel():
 
         return X_raw.astype(np.float32)
 
-    def fit(self, X_raw, y_raw, claims_raw):
+    def fit(self, X_raw, y_raw, claims_raw, prepro = True):
         """Classifier training function.
 
         Here you will use the fit function for your classifier.
@@ -141,7 +141,10 @@ class PricingModel():
         print(self.y_mean, self.y_std)
         # =============================================================
         # REMEMBER TO A SIMILAR LINE TO THE FOLLOWING SOMEWHERE IN THE CODE
-        X_clean = self._preprocessor(X_raw)
+        if prepro:
+            X_clean = self._preprocessor(X_raw)
+        else:
+            X_clean = X_raw
 
         # THE FOLLOWING GETS CALLED IF YOU WISH TO CALIBRATE YOUR PROBABILITES
         if self.calibrate:
@@ -197,7 +200,7 @@ class PricingModel():
         # REMEMBER TO INCLUDE ANY PRICING STRATEGY HERE.
         # For example you could scale all your prices down by a factor
 
-        return self.predict_claim_probability(X_raw) * self.y_mean * 0.8
+        return self.predict_claim_probability(X_raw) * self.y_mean * 0.6
 
     def save_model(self):
         """Saves the class instance as a pickle file."""
@@ -416,16 +419,21 @@ if __name__ == "__main__":
     test = PricingModel()
     x, y, claims_raw = test.load_data("part3_training_data.csv")
     print(x.shape, y.shape, claims_raw.shape)
+    x = test._preprocessor(x)
+    train_data, test_data = test.base_classifier.separate_data(x, y.to_numpy(np.float32))
+
+    print(train_data[0].shape, train_data[1].shape)
 
     nnz = np.where(claims_raw != 0)[0]
     print(claims_raw[nnz])
     y_mean = np.mean(claims_raw[nnz])
     y_std = np.std(claims_raw[nnz])
+
     print(y_mean, y_std)
     #test2 = load_model()
     #print(test2.predict_premium(x))
-    #test.fit(x, y, claims_raw)
-    #test.base_classifier.evaluate_architecture()
+    test.fit(train_data[0], train_data[1], claims_raw, False)
+    test.base_classifier.evaluate_architecture(True)
 
     """
     list = [2,15,17,18,21,22,23,25,26]
