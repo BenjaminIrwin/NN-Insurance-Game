@@ -404,7 +404,7 @@ class PricingModel():
         x = x.to_numpy(dtype=str)
         for att_i in range(x.shape[1]):
             try:
-                float(x[234, att_i])
+                float(x[0, att_i])
 
             except ValueError:
                 values = x[:, att_i]
