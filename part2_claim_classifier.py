@@ -885,7 +885,7 @@ class ClaimClassifier():
         X_test = torch.Tensor(X_clean)
         oupt = self.fitted_model(X_test)  # a Tensor of floats
 
-        return oupt.numpy()
+        return oupt.detach().numpy()
 
 
     def evaluate_architecture(self, with_test = False):

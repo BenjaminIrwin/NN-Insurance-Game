@@ -427,8 +427,10 @@ if __name__ == "__main__":
     x, y, y2 = test.load_data("part3_training_data.csv")
     print(x.shape, y.shape, y2.shape)
 
-    test.fit(x, y, y2)
-    test.base_classifier.evaluate_architecture()
+    test2 = load_model()
+    print(test2.predict_premium(x))
+    #test.fit(x, y, y2)
+    #test.base_classifier.evaluate_architecture()
 
     """
     list = [2,15,17,18,21,22,23,25,26]
