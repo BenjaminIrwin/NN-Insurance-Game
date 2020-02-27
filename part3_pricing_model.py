@@ -29,19 +29,6 @@ def fit_and_calibrate_classifier(classifier, X, y):
         classifier, method='sigmoid', cv='prefit').fit(X_cal, y_cal)
     return calibrated_classifier
 
-class ClaimClassifierPart3():
-
-    def __init__(self,):
-        """
-        Feel free to alter this as you wish, adding instance variables as
-        necessary.
-        """
-        self.fitted_model = 0;
-
-        self.train_data = 0;
-        self.test_data = 0;
-        self.val_data = 0;
-
 
 class Insurance_NN_3(nn.Module):
     def __init__(self):
@@ -74,6 +61,7 @@ class PricingModel():
         necessary.
         """
         self.y_mean = None
+        self.y_std = None
         self.calibrate = calibrate_probabilities
         # =============================================================
         # READ ONLY IF WANTING TO CALIBRATE
@@ -149,6 +137,8 @@ class PricingModel():
         """
         nnz = np.where(claims_raw != 0)[0]
         self.y_mean = np.mean(claims_raw[nnz])
+        self.y_std = np.std(claims_raw[nnz])
+        print(self.y_mean, self.y_std)
         # =============================================================
         # REMEMBER TO A SIMILAR LINE TO THE FOLLOWING SOMEWHERE IN THE CODE
         X_clean = self._preprocessor(X_raw)
@@ -207,7 +197,7 @@ class PricingModel():
         # REMEMBER TO INCLUDE ANY PRICING STRATEGY HERE.
         # For example you could scale all your prices down by a factor
 
-        return self.predict_claim_probability(X_raw) * self.y_mean
+        return self.predict_claim_probability(X_raw) * (self.y_mean - self.y_std)
 
     def save_model(self):
         """Saves the class instance as a pickle file."""
@@ -427,9 +417,9 @@ if __name__ == "__main__":
     x, y, y2 = test.load_data("part3_training_data.csv")
     print(x.shape, y.shape, y2.shape)
 
-    test2 = load_model()
-    print(test2.predict_premium(x))
-    #test.fit(x, y, y2)
+    #test2 = load_model()
+    #print(test2.predict_premium(x))
+    test.fit(x, y, y2)
     #test.base_classifier.evaluate_architecture()
 
     """

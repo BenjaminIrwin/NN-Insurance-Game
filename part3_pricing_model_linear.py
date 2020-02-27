@@ -4,6 +4,21 @@ import pickle
 import numpy as np
 
 
+import matplotlib.pyplot as plt
+import copy
+from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import OneHotEncoder
+import pandas as pd
+from sklearn import preprocessing
+from scipy import stats
+import copy
+
+from part2_claim_classifier import EarlyStopping, Insurance_NN, ClaimClassifier, \
+    WeightedBCELoss, analyse, weighted_binary_cross_entropy
+
+import torch
+import torch.nn as nn
+
 def fit_and_calibrate_classifier(classifier, X, y):
     # DO NOT ALTER THIS FUNCTION
     X_train, X_cal, y_train, y_cal = train_test_split(
@@ -14,6 +29,23 @@ def fit_and_calibrate_classifier(classifier, X, y):
     calibrated_classifier = CalibratedClassifierCV(
         classifier, method='sigmoid', cv='prefit').fit(X_cal, y_cal)
     return calibrated_classifier
+
+
+class Insurance_NN_4(nn.Module):
+    def __init__(self):
+        super(Insurance_NN_4, self).__init__()
+
+        self.apply_layers = nn.Sequential(
+            # 2 fully connected hidden layers of 8 neurons goes to 1
+            # 9/6 - (100 - 10) - 1
+            nn.Linear(9, 1),
+            nn.Sigmoid()
+        )
+
+    # Defining the forward pass
+    def forward(self, x):
+        x = self.apply_layers(x)
+        return x.view(len(x))
 
 
 # class for part 3
@@ -40,7 +72,7 @@ class PricingModelLinear():
         # If you wish to use the classifier in part 2, you will need
         # to implement a predict_proba for it before use
         # =============================================================
-        self.base_classifier = None # ADD YOUR BASE CLASSIFIER HERE
+        self.base_classifier = Insurance_NN_4() # ADD YOUR BASE CLASSIFIER HERE
 
 
     # YOU ARE ALLOWED TO ADD MORE ARGUMENTS AS NECESSARY TO THE _preprocessor METHOD
@@ -62,8 +94,21 @@ class PricingModelLinear():
         """
         # =============================================================
         # YOUR CODE HERE
+        X_raw = copy.deepcopy(
+            X_raw[['pol_coverage', 'vh_age', 'vh_din', 'vh_fuel',
+                   'vh_sale_begin', 'vh_sale_end', 'vh_speed', 'vh_value',
+                   'vh_weight']])
 
-        return  # YOUR CLEAN DATA AS A NUMPY ARRAY
+        X_raw.dropna(how="any", inplace=True)
+        X_raw = self.integer_encode(X_raw)
+
+        if not isinstance(X_raw, np.ndarray):
+            X_raw = X_raw.to_numpy(dtype=np.float)
+
+        min_max_scaler = preprocessing.MinMaxScaler()
+        X_raw = min_max_scaler.fit_transform(X_raw)
+
+        return X_raw.astype(np.float32)
 
     def fit(self, X_raw, y_raw, claims_raw):
         """Classifier training function.
@@ -97,6 +142,7 @@ class PricingModelLinear():
                 self.base_classifier, X_clean, y_raw)
         else:
             self.base_classifier = self.base_classifier.fit(X_clean, y_raw)
+            self.save_model()
         return self.base_classifier
 
     def predict_claim_probability(self, X_raw):
@@ -118,10 +164,10 @@ class PricingModelLinear():
         """
         # =============================================================
         # REMEMBER TO A SIMILAR LINE TO THE FOLLOWING SOMEWHERE IN THE CODE
-        # X_clean = self._preprocessor(X_raw)
+        X_clean = self._preprocessor(X_raw)
 
-
-        return  # return probabilities for the positive class (label 1)
+        # return probabilities for the positive class (label 1)
+        return  self.base_classifier.predict_probabilities(X_clean)
 
     def predict_premium(self, X_raw):
         """Predicts premiums based on the pricing model.
@@ -153,8 +199,71 @@ class PricingModelLinear():
             pickle.dump(self, target)
 
 
+    def load_data(self, filename):
+        """
+        Function to load data from file
+        Args:
+            filename (str) - name of .txt file you are loading data from
+        Output:
+            (x, y) (tuple) - x: 2D array of training data where each row
+            corresponds to a different sample and each column corresponds to a
+            different attribute.
+                            y: 1D array where each index corresponds to the
+            ground truth label of the sample x[index][]
+        """
+
+        dat = pd.read_csv("part3_training_data.csv")
+        #dat.drop(columns=["drv_sex2"], inplace=True)
+        #dat.dropna(how="any", inplace=True)
+        x = dat.drop(columns=["claim_amount", "made_claim"])
+        y = dat["made_claim"]
+        y2 = dat["claim_amount"]
+        y2 = y2[y2!=0]
+
+        return x, y, y2.to_numpy()
+
+    def separate_pos_neg(self, x, y):
+
+        # Separate into positive and negative samples
+        pos_train_y = []
+        pos_train_x = np.empty((0, x.shape[1]), np.float32)
+        neg_train_y = []
+        neg_train_x = np.empty((0, x.shape[1]), np.float32)
+        for i in range(y.shape[0]):
+            if y[i] == 1:
+                pos_train_y.append(y[i])
+                pos_train_x = np.vstack((pos_train_x, x[i]))
+            else:
+                neg_train_y.append(y[i])
+                neg_train_x = np.vstack((neg_train_x, x[i]))
+
+        neg_train_y = np.array(neg_train_y, dtype=np.float32)
+        pos_train_y = np.array(pos_train_y, dtype=np.float32)
+
+        return (neg_train_x, neg_train_y), (pos_train_x, pos_train_y)
+
+    def integer_encode(self, x):
+        """
+        Encode all columns containing strings with unique numbers for every
+        category type
+        """
+        x = x.to_numpy(dtype=str)
+        for att_i in range(x.shape[1]):
+            try:
+                float(x[0, att_i])
+
+            except ValueError:
+                values = x[:, att_i]
+                # integer encode
+                label_encoder = LabelEncoder()
+                integer_encoded = label_encoder.fit_transform(values)
+                x[:, att_i] = integer_encoded
+        return x.astype(float)
+
 def load_model():
     # Please alter this section so that it works in tandem with the save_model method of your class
     with open('part3_pricing_model.pickle', 'rb') as target:
         trained_model = pickle.load(target)
     return trained_model
+
+
