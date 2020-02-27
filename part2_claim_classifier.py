@@ -11,6 +11,7 @@ from sklearn.utils import shuffle
 from sklearn import metrics
 #from pytorchtools import EarlyStopping
 from sklearn import preprocessing
+from scipy import stats
 
 import torch
 import torch.nn as nn
@@ -69,7 +70,7 @@ def analyse(model, data_x, data_y):
     pred_y = oupt >= 0.5       # a Tensor of 0s and 1s
     num_correct = torch.sum(Y==pred_y)  # a Tensor
     acc = (num_correct.item() * 100.0 / len(data_y))  # scalar
-    return (acc, pred_y)
+    return (acc, pred_y, oupt)
 
 """
 class Insurance_NN(nn.Module):
@@ -173,18 +174,18 @@ class WeightedBCELoss(nn.Module):
 
 class ClaimClassifier():
 
-    def __init__(self,):
+    def __init__(self, model):
         """
         Feel free to alter this as you wish, adding instance variables as
         necessary. 
         """
-        self.fitted_model = 0;
+        self.fitted_model = model;
 
         self.train_data = 0;
         self.test_data = 0;
         self.val_data = 0;
 
-    def load_data(self, filename):
+    def load_data(self, filename, drop_extra = False):
         """
         Function to load data from file
         Args:
@@ -198,6 +199,9 @@ class ClaimClassifier():
         """
         # load data to single 2D array
         dat = pd.read_csv("part2_training_data.csv")
+        if drop_extra:
+            dat = dat.drop(columns=["drv_age1", "vh_cyl", "pol_bonus"])
+            #dat = dat.drop(columns=["vh_sale_begin", "vh_sale_end", "vh_age"])
         x = dat.drop(columns=["claim_amount", "made_claim"])
         y = dat["made_claim"]
 
@@ -348,15 +352,26 @@ class ClaimClassifier():
         attributes1 = []
         attributes2 = []
         difference = []
+
+        difference2 = []
         for i in range(np.shape(neg_x)[1]):
+
             attributes1.append(np.mean(neg_x[:, i]))
             attributes2.append(np.mean(pos_x[:, i]))
             difference.append(((attributes2[i]-attributes1[i])*100)/attributes1[i])
+
+            difference2.append(stats.ks_2samp(neg_x[:, i], pos_x[:, i]))
+            print(i)
 
 
         print(attributes1)
         print(attributes2)
         print(difference)
+        print(difference2)
+        for i in range(len(difference2)):
+            if difference2[i][0] > 0.1:
+                print(i, difference2[i])
+
 
 
     def WeightedTrain(self, model, train_x, train_y, val_x, val_y, with_weight = True):
@@ -364,15 +379,15 @@ class ClaimClassifier():
         # https://discuss.pytorch.org/t/unclear-about-weighted-bce-loss/21486
         # https://github.com/pytorch/pytorch/issues/5660
         if with_weight:
-            pos_weight = torch.Tensor([(900 / 100)])
+            pos_weight = torch.Tensor([(800 / 100)])
             criterion = WeightedBCELoss(pos_weight)
         else:
             criterion = nn.BCELoss()
 
         #print(torch.sum(train_y)/train_y.shape[0])
         optimiser = torch.optim.AdamW(model.parameters(), lr=0.01)
-        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimiser, max_lr=0.001, steps_per_epoch=900,epochs=100)
-        #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, patience=5)
+        #scheduler = torch.optim.lr_scheduler.OneCycleLR(optimiser, max_lr=0.001, steps_per_epoch=900,epochs=100)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, patience=10)
 
         # to track the training loss as the model trains
         train_losses = []
@@ -383,7 +398,7 @@ class ClaimClassifier():
         # to track the average validation loss per epoch as the model trains
         avg_valid_losses = []
 
-        early_stopping = EarlyStopping(patience=20, verbose=True)
+        early_stopping = EarlyStopping(patience=30, verbose=True)
 
         num_epochs = 100
 
@@ -416,7 +431,7 @@ class ClaimClassifier():
                 batch_loss.backward()
                 optimiser.step()
                 # Signal OneCycleLR adaptive LR
-                scheduler.step()
+                #scheduler.step()
                 train_losses.append(batch_loss.item())
 
 
@@ -461,7 +476,6 @@ class ClaimClassifier():
 
     def DownsampleTrain(self, model, train_x, train_y, val_x, val_y):
 
-        loss_list = []
         criterion = nn.BCELoss()
 
         optimiser = torch.optim.AdamW(model.parameters(), lr=0.1)
@@ -570,6 +584,118 @@ class ClaimClassifier():
         return model
 
 
+    def UpsampleTrain(self, model, train_x, train_y, val_x, val_y, Weighted = True):
+        # UNFINISHED
+        criterion = nn.BCELoss()
+
+        optimiser = torch.optim.AdamW(model.parameters(), lr=0.1)
+        # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimiser, max_lr=0.1,steps_per_epoch=140,epochs=500)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser,
+                                                               patience=25)
+
+        # to track the training loss as the model trains
+        train_losses = []
+        # to track the validation loss as the model trains
+        valid_losses = []
+        # to track the average training loss per epoch as the model trains
+        avg_train_losses = []
+        # to track the average validation loss per epoch as the model trains
+        avg_valid_losses = []
+
+        early_stopping = EarlyStopping(patience=100, verbose=True)
+
+        # Separate into positive and negative samples
+        (neg_train_x, neg_train_y), (pos_train_x, pos_train_y) = \
+            self.separate_pos_neg(train_x, train_y)
+
+        print(len(pos_train_y))
+        print(pos_train_x.shape)
+
+        print(len(neg_train_y))
+
+        neg_train_x, neg_train_y = shuffle(neg_train_x, neg_train_y)
+        num_epochs = 500
+
+        for epoch in range(num_epochs):
+            model.train()
+
+            neg_train_x, neg_train_y = shuffle(neg_train_x, neg_train_y)
+
+            # 2004, 2508, 3012
+            train_x_new = np.concatenate(
+                (neg_train_x[:int(1.0 * len(pos_train_x))], pos_train_x))
+            train_y_new = np.concatenate(
+                (neg_train_y[:int(1.0 * len(pos_train_x))], pos_train_y))
+
+            # concat first 1668 of this matrix to pos vals then proceed as if theyr're train_x and train_y
+            shuffled_train_x, shuffled_train_y = shuffle(train_x_new,
+                                                         train_y_new,
+                                                         random_state=0)
+            shuff_val_x, shuff_val_y = shuffle(val_x, val_y, random_state=0)
+
+            shuffled_train_x = torch.from_numpy(shuffled_train_x)
+            shuffled_train_y = torch.from_numpy(shuffled_train_y)
+
+            x_batches = torch.split(shuffled_train_x, 20, dim=0)
+            y_batches = torch.split(shuffled_train_y, 20, dim=0)
+            x_val_batches = torch.split(shuff_val_x, 20, dim=0)
+            y_val_batches = torch.split(shuff_val_y, 20, dim=0)
+
+            for param_group in optimiser.param_groups:
+                print("\nLearning Rate = ", param_group['lr'])
+
+            for batch_i in range(len(x_batches)):
+                batch_data = x_batches[batch_i]
+                batch_label = y_batches[batch_i]
+
+                # Perform gradient decent algorithm to reduce loss
+                optimiser.zero_grad()
+                batch_output = model(batch_data)
+
+                # Calculate loss by comparing ground truth to predictions on batch
+                batch_loss = criterion(batch_output, batch_label)
+                batch_loss.backward()
+                optimiser.step()
+                # Signal OneCycleLR adaptive LR
+                # scheduler.step()
+
+            # VALIDATE MODEL
+            model.eval()  # prep for evaluation
+
+            for val_i in range(len(x_val_batches)):
+                # Predict on validiation batch
+                output = model(x_val_batches[val_i])
+                # Calculate loss and save in list
+                loss = criterion(output, y_val_batches[val_i])
+                valid_losses.append(loss.item())
+
+            train_loss = np.average(train_losses)
+            valid_loss = np.average(valid_losses)
+            avg_train_losses.append(train_loss)
+            avg_valid_losses.append(valid_loss)
+
+            # Signal ReduceLROnPlateau adapaptive LR with validation loss
+            scheduler.step(valid_loss)
+
+            train_losses = []
+            valid_losses = []
+
+            print("Epoch = %d, Loss = %f" % (epoch + 1, batch_loss.item()))
+            acc = analyse(model, val_x, val_y.numpy())[0]
+            print("Validation Accuracy = ", acc)
+
+            # early_stopping needs the validation loss to check if it has decresed,
+            # and if it has, it will make a checkpoint of the current model
+            early_stopping(valid_loss, model)
+
+            if early_stopping.early_stop:
+                print("Early Stopping")
+                break
+
+            model.load_state_dict(torch.load('checkpoint.pt'))
+
+        return model
+
     def separate_data(self, X_raw, Y_raw):
         """
         Separate data into training and test data in 85:15 ratio. The training
@@ -588,8 +714,7 @@ class ClaimClassifier():
         return (train_x, train_y), (test_x, test_y)
 
 
-
-    def fit(self, X_raw, y_raw):
+    def fit(self, X_raw, y_raw, save_model = False):
         """Classifier training function.
 
         Here you will implement the training function for your classifier.
@@ -636,18 +761,18 @@ class ClaimClassifier():
         val_x = torch.from_numpy(val_x)
         val_y = torch.from_numpy(val_y)
 
-        model = Insurance_NN()
-        print(model)
-        print(model(train_x).shape)
+        print(self.fitted_model)
+        print(self.fitted_model(train_x).shape)
 
-        model.train()
+        self.fitted_model.train()
 
-        #self.fitted_model = self.WeightedTrain(model, train_x, train_y, val_x, val_y)
-        self.fitted_model = self.DownsampleTrain(model, train_x, train_y, val_x, val_y)
+        #self.fitted_model = self.WeightedTrain(self.fitted_model, train_x, train_y, val_x, val_y)
+        self.fitted_model = self.DownsampleTrain(self.fitted_model, train_x, train_y, val_x, val_y)
 
-        self.save_model()
+        if save_model:
+            self.save_model()
 
-        return
+        return self
 
         #model = load_model()
         model.eval()
@@ -746,6 +871,23 @@ class ClaimClassifier():
 
         return  # YOUR PREDICTED CLASS LABELS
 
+    def predict_probabilities(self, X_raw):
+        """
+        Used in Part 3
+        """
+
+        if not isinstance(X_raw, np.ndarray):
+            X_raw= X_raw.to_numpy(dtype=np.float)
+
+        X_clean = self._preprocessor(X_raw)
+        #self.fitted_model = load_model().fitted_model
+
+        X_test = torch.Tensor(X_clean)
+        oupt = self.fitted_model(X_test)  # a Tensor of floats
+
+        return oupt.numpy()
+
+
     def evaluate_architecture(self, with_test = False):
         """Architecture evaluation utility.
 
@@ -755,21 +897,31 @@ class ClaimClassifier():
         You can use external libraries such as scikit-learn for this
         if necessary.
         """
-        train_x, train_y = self.test_data
+        train_x, train_y = self.train_data
+        print("Training Data Shape = ", train_x.shape, train_y.shape)
         val_x, val_y = self.val_data
+        print("Validation Data Shape = ", val_x.shape, val_y.shape)
 
         # Calculate and print accuracies based on model predictions
         acc1 = analyse(self.fitted_model, train_x, train_y)
         acc2 = analyse(self.fitted_model, val_x, val_y)
         print("Train Accuracy = ", acc1[0])
+        auc_score1 = metrics.roc_auc_score(train_y, acc1[2].detach().numpy())
+        print("Train AUC Score = ", auc_score1)
         print("Validation Accuracy = ", acc2[0])
+        auc_score2 = metrics.roc_auc_score(val_y, acc2[2].detach().numpy())
+        print("Validation AUC Score = ", auc_score2)
 
         labels = ['No Claim', 'Claim']
 
         if with_test:
             test_x, test_y = self.test_data
+            print("Test Data Shape = ", test_x.shape, test_y.shape)
             acc3 = analyse(self.fitted_model, test_x, test_y)
             print("Test Accuracy = ", acc3[0])
+            auc_score3 = metrics.roc_auc_score(test_y,
+                                              acc3[2].detach().numpy())
+            print("Test AUC Score = ", auc_score3)
 
             f, (ax1, ax2, ax3) = plt.subplots(1, 3)
             confusion_test = metrics.confusion_matrix(test_y, acc3[1].numpy(),
@@ -797,12 +949,15 @@ class ClaimClassifier():
         plt.gcf().set_size_inches(plot_width, 5)
         plt.show()
 
+
+
         return
 
     def save_model(self):
         # Please alter this file appropriately to work in tandem with your load_model function below
         with open('part2_claim_classifier.pickle', 'wb') as target:
             pickle.dump(self, target)
+
 
 
 def load_model():
@@ -830,11 +985,11 @@ class Insurance_NN(nn.Module):
 
         self.apply_layers = nn.Sequential(
             # 2 fully connected hidden layers of 8 neurons goes to 1
-            # 9 - (100 - 10) - 1
-            nn.Linear(9, 100),
+            # 9/6 - (100 - 10) - 1
+            nn.Linear(6, 70),
             nn.LeakyReLU(inplace=True),
             nn.Dropout(),
-            nn.Linear(100, 10),
+            nn.Linear(70, 10),
             nn.LeakyReLU(inplace=True),
             nn.Dropout(),
             nn.Linear(10, 1),
@@ -848,12 +1003,16 @@ class Insurance_NN(nn.Module):
 
 if __name__ == "__main__":
 
-    test = ClaimClassifier()
-    x, y = test.load_data("part2_training_data.csv")
-    print(test._preprocessor(x))
-    """
+    test = ClaimClassifier(Insurance_NN())
+    x, y = test.load_data("part2_training_data.csv", True)
+    #list = [1, 3, 5, 6, 7, 8]
+    #print([x.columns[i] for i in list])
+    #x = x.to_numpy(dtype=float)
+    #test.evaluate_input3(x, y.to_numpy(dtype=float))
+
+
     train_data, test_data = test.separate_data(x, y)
-    test.fit(train_data[0], train_data[1])
+    test.fit(train_data[0], train_data[1], True)
     predictions_test = test.predict(pd.DataFrame(test_data[0]))
 
 
@@ -864,8 +1023,8 @@ if __name__ == "__main__":
     metrics.ConfusionMatrixDisplay(confusion_test, labels).plot()
 
     test.evaluate_architecture(True)
-    test.evaluate_architecture()
-    """
+    #test.evaluate_architecture()
+
     """
     #test.evaluate_input3(x, y)
     x_clean = test._preprocessor(x)

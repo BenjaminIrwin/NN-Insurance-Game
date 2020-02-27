@@ -9,6 +9,14 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import OneHotEncoder
 import pandas as pd
 from sklearn import preprocessing
+from scipy import stats
+import copy
+
+from part2_claim_classifier import EarlyStopping, Insurance_NN, ClaimClassifier, \
+    WeightedBCELoss, analyse, weighted_binary_cross_entropy
+
+import torch
+import torch.nn as nn
 
 def fit_and_calibrate_classifier(classifier, X, y):
     # DO NOT ALTER THIS FUNCTION
@@ -21,6 +29,41 @@ def fit_and_calibrate_classifier(classifier, X, y):
         classifier, method='sigmoid', cv='prefit').fit(X_cal, y_cal)
     return calibrated_classifier
 
+class ClaimClassifierPart3():
+
+    def __init__(self,):
+        """
+        Feel free to alter this as you wish, adding instance variables as
+        necessary.
+        """
+        self.fitted_model = 0;
+
+        self.train_data = 0;
+        self.test_data = 0;
+        self.val_data = 0;
+
+
+class Insurance_NN_3(nn.Module):
+    def __init__(self):
+        super(Insurance_NN_3, self).__init__()
+
+        self.apply_layers = nn.Sequential(
+            # 2 fully connected hidden layers of 8 neurons goes to 1
+            # 9/6 - (100 - 10) - 1
+            nn.Linear(9, 70),
+            nn.LeakyReLU(inplace=True),
+            nn.Dropout(),
+            nn.Linear(70, 10),
+            nn.LeakyReLU(inplace=True),
+            nn.Dropout(),
+            nn.Linear(10, 1),
+            nn.Sigmoid()
+        )
+
+    # Defining the forward pass
+    def forward(self, x):
+        x = self.apply_layers(x)
+        return x.view(len(x))
 
 # class for part 3
 class PricingModel():
@@ -46,7 +89,7 @@ class PricingModel():
         # If you wish to use the classifier in part 2, you will need
         # to implement a predict_proba for it before use
         # =============================================================
-        self.base_classifier = None # ADD YOUR BASE CLASSIFIER HERE
+        self.base_classifier = ClaimClassifier(Insurance_NN_3()) # ADD YOUR BASE CLASSIFIER HERE
 
 
     # YOU ARE ALLOWED TO ADD MORE ARGUMENTS AS NECESSARY TO THE _preprocessor METHOD
@@ -68,7 +111,12 @@ class PricingModel():
         """
         # =============================================================
         # YOUR CODE HERE
-        #X_raw.dropna(how="any", inplace=True)
+        X_raw = copy.deepcopy(X_raw[['pol_coverage', 'vh_age', 'vh_din', 'vh_fuel',
+                       'vh_sale_begin', 'vh_sale_end', 'vh_speed', 'vh_value',
+                       'vh_weight']])
+
+
+        X_raw.dropna(how="any", inplace=True)
         X_raw = test.integer_encode(X_raw)
 
         if not isinstance(X_raw, np.ndarray):
@@ -110,8 +158,9 @@ class PricingModel():
             self.base_classifier = fit_and_calibrate_classifier(
                 self.base_classifier, X_clean, y_raw)
         else:
-            self.base_classifier = self.base_classifier.fit(X_clean, y_raw)
-        return self.base_classifier
+            self.base_classifier.fit(X_clean, y_raw)
+            self.save_model()
+        return self
 
     def predict_claim_probability(self, X_raw):
         """Classifier probability prediction function.
@@ -132,10 +181,10 @@ class PricingModel():
         """
         # =============================================================
         # REMEMBER TO A SIMILAR LINE TO THE FOLLOWING SOMEWHERE IN THE CODE
-        # X_clean = self._preprocessor(X_raw)
+        X_clean = self._preprocessor(X_raw)
 
-
-        return  # return probabilities for the positive class (label 1)
+        # return probabilities for the positive class (label 1)
+        return self.base_classifier.predict_probabilities(X_clean)
 
     def predict_premium(self, X_raw):
         """Predicts premiums based on the pricing model.
@@ -183,10 +232,12 @@ class PricingModel():
         """
 
         dat = pd.read_csv("part3_training_data.csv")
-        dat.drop(columns=["drv_sex2"], inplace=True)
-        dat.dropna(how="any", inplace=True)
+        #dat.drop(columns=["drv_sex2"], inplace=True)
+        #dat.dropna(how="any", inplace=True)
         x = dat.drop(columns=["claim_amount", "made_claim"])
         y = dat["made_claim"]
+        y2 = dat["claim_amount"]
+        y2 = y2[y2!=0]
         """
         # load data to single 2D array
         data_set = np.genfromtxt(filename, dtype=str, delimiter=',', skip_header=1)
@@ -197,7 +248,7 @@ class PricingModel():
         y = np.array(data_set[:, (num_att-1)], dtype=np.float)
         """
 
-        return x, y
+        return x, y, y2.to_numpy()
 
 
     def set_axis_style(self, ax, labels):
@@ -288,27 +339,40 @@ class PricingModel():
         plt.subplots_adjust(bottom=0.15, wspace=0.05)
         plt.savefig("compare_box_3.pdf", bbox_inches='tight')
 
-    def evaluate_input3(self, x, y):
+    def evaluate_input3(self, x, y, split = 0):
         """
         Function to evaluate data loaded from file
 
         """
 
         # Separate positive and negative results
+        if split == 0:
+            (neg_x, neg_y), (pos_x, pos_y) = self.separate_pos_neg(x, y)
+        else:
+            (neg_x, neg_y), (pos_x, pos_y) = split
+            print(split[0][0].shape, split[1][0].shape)
 
-        (neg_x, neg_y), (pos_x, pos_y) = self.separate_pos_neg(x, y)
         attributes1 = []
         attributes2 = []
         difference = []
+        difference2 = []
         for i in range(np.shape(neg_x)[1]):
+
+
             attributes1.append(np.mean(neg_x[:, i]))
             attributes2.append(np.mean(pos_x[:, i]))
             difference.append(((attributes2[i]-attributes1[i])*100)/attributes1[i])
-
+            difference2.append(stats.ks_2samp(neg_x[:, i], pos_x[:, i]))
+            print(i)
 
         print(attributes1)
         print(attributes2)
         print(difference)
+        print(difference2)
+        for i in range(len(difference2)):
+            if difference2[i][0] > 0.1 and difference2[i][1] < 0.001:
+                print(i, difference2[i])
+
 
 
     def separate_pos_neg(self, x, y):
@@ -360,15 +424,35 @@ def load_model():
 
 if __name__ == "__main__":
     test = PricingModel()
-    x, y = test.load_data("part3_training_data.csv")
-    #x.dropna(how="any", inplace=True)
-    #x = test.integer_encode(x
+    x, y, y2 = test.load_data("part3_training_data.csv")
+    print(x.shape, y.shape, y2.shape)
+
+    test.fit(x, y, y2)
+    test.base_classifier.evaluate_architecture()
+
+    """
+    list = [2,15,17,18,21,22,23,25,26]
+    print([x.columns[i] for i in list])
+    #x = test.integer_encode(x)
     x = test._preprocessor(x)
+    print(x[:,2])
+    #x = test._preprocessor(x)
     y = y.to_numpy()
     print(x.shape)
     print(y.shape)
-    test.evaluate_input2(x, y)
+    #split = test.separate_pos_neg(x, y)
 
+    #file = open('Part3_Split_norm.pickle', 'wb')
+    #pickle.dump(split, file)
+    #file.close()
+
+    file = open('Part3_Split_norm.pickle', 'rb')
+    split = pickle.load(file)
+    file.close()
+
+    print(split[0][0].shape, split[1][0].shape)
+    test.evaluate_input3(x, y, split)
+    """
 
 """
     for i in range(x.shape[0]):
