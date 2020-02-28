@@ -37,7 +37,7 @@ class Insurance_NN_4(nn.Module):
 
         self.apply_layers = nn.Sequential(
             # 2 fully connected hidden layers of 8 neurons goes to 1
-            # 9/6 - (100 - 10) - 1
+            # 9 - 1
             nn.Linear(9, 1),
             nn.Sigmoid()
         )
@@ -72,7 +72,7 @@ class PricingModelLinear():
         # If you wish to use the classifier in part 2, you will need
         # to implement a predict_proba for it before use
         # =============================================================
-        self.base_classifier = Insurance_NN_4() # ADD YOUR BASE CLASSIFIER HERE
+        self.base_classifier = ClaimClassifier(Insurance_NN_4()) # ADD YOUR BASE CLASSIFIER HERE
 
 
     # YOU ARE ALLOWED TO ADD MORE ARGUMENTS AS NECESSARY TO THE _preprocessor METHOD
@@ -110,7 +110,7 @@ class PricingModelLinear():
 
         return X_raw.astype(np.float32)
 
-    def fit(self, X_raw, y_raw, claims_raw):
+    def fit(self, X_raw, y_raw, claims_raw, prepro = True):
         """Classifier training function.
 
         Here you will use the fit function for your classifier.
@@ -134,7 +134,10 @@ class PricingModelLinear():
         self.y_mean = np.mean(claims_raw[nnz])
         # =============================================================
         # REMEMBER TO A SIMILAR LINE TO THE FOLLOWING SOMEWHERE IN THE CODE
-        X_clean = self._preprocessor(X_raw)
+        if prepro:
+            X_clean = self._preprocessor(X_raw)
+        else:
+            X_clean = X_raw
 
         # THE FOLLOWING GETS CALLED IF YOU WISH TO CALIBRATE YOUR PROBABILITES
         if self.calibrate:
@@ -267,3 +270,24 @@ def load_model():
     return trained_model
 
 
+
+if __name__ == "__main__":
+    test = PricingModelLinear()
+    x, y, claims_raw = test.load_data("part3_training_data.csv")
+
+    print(x.shape, y.shape, claims_raw.shape)
+    x = test._preprocessor(x)
+    train_data, test_data = test.base_classifier.separate_data(x, y.to_numpy(np.float32))
+
+    print(train_data[0].shape, train_data[1].shape)
+
+    nnz = np.where(claims_raw != 0)[0]
+    print(claims_raw[nnz])
+    y_mean = np.mean(claims_raw[nnz])
+    y_std = np.std(claims_raw[nnz])
+
+    print(y_mean, y_std)
+    #test2 = load_model()
+    #print(test2.predict_premium(x))
+    test.fit(train_data[0], train_data[1], claims_raw, False)
+    test.base_classifier.evaluate_architecture(True)

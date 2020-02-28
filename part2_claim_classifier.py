@@ -388,8 +388,8 @@ class ClaimClassifier():
 
         #print(torch.sum(train_y)/train_y.shape[0])
         optimiser = torch.optim.AdamW(model.parameters(), lr=0.01)
-        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimiser, max_lr=0.001, steps_per_epoch=900,epochs=100)
-        #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, patience=10)
+        #scheduler = torch.optim.lr_scheduler.OneCycleLR(optimiser, max_lr=0.001, steps_per_epoch=900,epochs=100)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, patience=10)
 
         # to track the training loss as the model trains
         train_losses = []
@@ -825,34 +825,7 @@ class ClaimClassifier():
 
         return self
 
-        #model = load_model()
-        model.eval()
 
-        # -------------------- EVALUATE -------------------
-        acc1 = analyse(model, train_x, train_y.numpy())
-        acc2 = analyse(model, val_x, val_y.numpy())
-        acc3 = analyse(model, test_x, test_y)
-        print("Train Accuracy = ", acc1[0])
-        print("Validation Accuracy = ", acc2[0])
-        print("Test Accuracy = ", acc3[0])
-
-        labels = ['No Accident', 'Accident']
-
-        f, (ax1, ax2, ax3) = plt.subplots(1, 3)
-        confusion1 = metrics.confusion_matrix(train_y.numpy(), acc1[1].numpy(), normalize='true')
-        print(confusion1)
-        confusion2 = metrics.confusion_matrix(val_y.numpy(), acc2[1].numpy(), normalize='true')
-        confusion3 = metrics.confusion_matrix(test_y, acc3[1].numpy(), normalize='true')
-
-        metrics.ConfusionMatrixDisplay(confusion1, labels).plot(ax=ax1)
-        ax1.set_title("Training Set")
-        metrics.ConfusionMatrixDisplay(confusion2, labels).plot(ax=ax2)
-        ax2.set_title("Validation Set")
-        metrics.ConfusionMatrixDisplay(confusion3, labels).plot(ax=ax3)
-        ax3.set_title("Test Set")
-
-        plt.gcf().set_size_inches(15, 5)
-        plt.show()
 
     def predict(self, X_raw):
         """Classifier probability prediction function.
@@ -891,36 +864,6 @@ class ClaimClassifier():
 
         return pred_y.numpy()
 
-        # -------------------- EVALUATE -------------------
-        acc1 = analyse(model, train_x, train_y.numpy())
-        acc2 = analyse(model, val_x, val_y.numpy())
-        acc3 = analyse(model, test_x, test_y)
-        print("Train Accuracy = ", acc1[0])
-        print("Validation Accuracy = ", acc2[0])
-        print("Test Accuracy = ", acc3[0])
-
-        labels = ['No Accident', 'Accident']
-
-        f, (ax1, ax2, ax3) = plt.subplots(1, 3)
-        confusion1 = metrics.confusion_matrix(train_y.numpy(), acc1[1].numpy(),
-                                              normalize='true')
-        print(confusion1)
-        confusion2 = metrics.confusion_matrix(val_y.numpy(), acc2[1].numpy(),
-                                              normalize='true')
-        confusion3 = metrics.confusion_matrix(test_y, acc3[1].numpy(),
-                                              normalize='true')
-
-        metrics.ConfusionMatrixDisplay(confusion1, labels).plot(ax=ax1)
-        ax1.set_title("Training Set")
-        metrics.ConfusionMatrixDisplay(confusion2, labels).plot(ax=ax2)
-        ax2.set_title("Validation Set")
-        metrics.ConfusionMatrixDisplay(confusion3, labels).plot(ax=ax3)
-        ax3.set_title("Test Set")
-
-        plt.gcf().set_size_inches(15, 5)
-        plt.show()
-
-        return  # YOUR PREDICTED CLASS LABELS
 
     def predict_probabilities(self, X_raw):
         """
@@ -999,8 +942,6 @@ class ClaimClassifier():
 
         plt.gcf().set_size_inches(plot_width, 5)
         plt.show()
-
-
 
         return
 
