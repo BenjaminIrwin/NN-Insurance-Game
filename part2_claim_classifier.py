@@ -277,7 +277,7 @@ class ClaimClassifier():
         fig, ax1 = plt.subplots(figsize=(11, 4))
 
         # type of plot
-        ax1.boxplot(attributes)
+        ax1.boxplot(attributes, showfliers=False)
         labels = ['drv_age1', 'vh_age', 'vh_cyl', 'vh_din', 'pol_bonus', 'vh_sl_b',
                   'vh_sl_e', 'vh_value', 'vh_speed']
 
@@ -322,11 +322,11 @@ class ClaimClassifier():
             attributes1.append(neg_x[:, i])
             attributes2.append(pos_x[:, i])
 
-        fig, axs = plt.subplots(2, figsize=(11, 11))
+        fig, axs = plt.subplots(2, figsize=(11, 8))
 
         # type of plot
-        axs[0].boxplot(attributes1)
-        axs[1].boxplot(attributes2)
+        axs[0].boxplot(attributes1, showfliers=False)
+        axs[1].boxplot(attributes2, showfliers=False)
         labels = ['drv_age1', 'vh_age', 'vh_cyl', 'vh_din', 'pol_bonus', 'vh_sl_b',
                   'vh_sl_e', 'vh_value', 'vh_speed']
 
@@ -334,12 +334,12 @@ class ClaimClassifier():
         self.set_axis_style(axs[1], labels)
 
         # plt.show()
-        axs[0].set(xlabel="Attribute Type", ylabel="Attribute Value")
+        axs[0].set(xlabel="", ylabel="Attribute Value")
         axs[0].set_title("No Claim")
         axs[1].set(xlabel="Attribute Type", ylabel="Attribute Value")
         axs[1].set_title("Claim")
 
-        plt.subplots_adjust(bottom=0.15, wspace=0.05)
+        #plt.subplots_adjust(bottom=0.15, wspace=0.05)
         plt.savefig("compare_box.pdf", bbox_inches='tight')
 
     def evaluate_input3(self, x, y):
@@ -980,13 +980,13 @@ class Insurance_NN(nn.Module):
         self.apply_layers = nn.Sequential(
             # 2 fully connected hidden layers of 8 neurons goes to 1
             # 9/6 - (100 - 10) - 1
-            nn.Linear(9, 20),
+            nn.Linear(9, 16),
             nn.LeakyReLU(inplace=True),
             nn.Dropout(),
             #nn.Linear(20, 5),
             #nn.LeakyReLU(inplace=True),
             #nn.Dropout(),
-            nn.Linear(20, 1),
+            nn.Linear(16, 1),
             nn.Sigmoid()
         )
 
@@ -999,6 +999,9 @@ if __name__ == "__main__":
 
     test = ClaimClassifier(Insurance_NN())
     x, y, y2 = test.load_data("part2_training_data.csv")
+    x = test._preprocessor(x)
+    test.evaluate_input2(x, y.to_numpy())
+    """
     train_data, test_data = test.separate_data(x, y)
     test.fit(train_data[0], train_data[1], True)
     #print(train_data[0].shape, train_data[1].shape)
@@ -1031,7 +1034,7 @@ if __name__ == "__main__":
 
     test.evaluate_architecture(True)
     #test.evaluate_architecture()
-
+    """
     """
     #test.evaluate_input3(x, y)
     x_clean = test._preprocessor(x)
