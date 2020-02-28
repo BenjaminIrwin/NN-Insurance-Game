@@ -481,7 +481,7 @@ class Preprocessor(object):
             - data {np.ndarray} dataset used to determined the parameters for
             the normalization.
         """
-        self.max_values = np.amax(data,axis=0)
+        self.max_values = np.amax(data,axis=0,keepdims=True)
         print(self.max_values)
         print(self.max_values.shape)
         print(np.amax(data,axis=0,keepdims=True))
