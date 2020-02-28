@@ -386,10 +386,12 @@ class ClaimClassifier():
         else:
             criterion = nn.BCELoss()
 
+        batch_size = 5
+
         #print(torch.sum(train_y)/train_y.shape[0])
-        optimiser = torch.optim.AdamW(model.parameters(), lr=0.01)
-        #scheduler = torch.optim.lr_scheduler.OneCycleLR(optimiser, max_lr=0.001, steps_per_epoch=900,epochs=100)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, patience=10)
+        optimiser = torch.optim.AdamW(model.parameters(), lr=0.0001)
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimiser, max_lr=0.001, steps_per_epoch=math.ceil((len(train_x)/batch_size)),epochs=20)
+        #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, patience=10)
 
         # to track the training loss as the model trains
         train_losses = []
@@ -400,9 +402,9 @@ class ClaimClassifier():
         # to track the average validation loss per epoch as the model trains
         avg_valid_losses = []
 
-        early_stopping = EarlyStopping(patience=30, verbose=True)
+        early_stopping = EarlyStopping(patience=100, verbose=True)
 
-        num_epochs = 100
+        num_epochs = 20
 
         for epoch in range(num_epochs):
             model.train()
@@ -410,10 +412,10 @@ class ClaimClassifier():
                                                          random_state=0)
             shuff_val_x, shuff_val_y = shuffle(val_x, val_y, random_state=0)
 
-            x_batches = torch.split(shuffled_train_x, 16, dim=0)
-            y_batches = torch.split(shuffled_train_y, 16, dim=0)
-            x_val_batches = torch.split(shuff_val_x, 16, dim=0)
-            y_val_batches = torch.split(shuff_val_y, 16, dim=0)
+            x_batches = torch.split(shuffled_train_x, batch_size, dim=0)
+            y_batches = torch.split(shuffled_train_y, batch_size, dim=0)
+            x_val_batches = torch.split(shuff_val_x, batch_size, dim=0)
+            y_val_batches = torch.split(shuff_val_y, batch_size, dim=0)
 
             for param_group in optimiser.param_groups:
                 print("\nLearning Rate = ",param_group['lr'])
@@ -433,7 +435,7 @@ class ClaimClassifier():
                 batch_loss.backward()
                 optimiser.step()
                 # Signal OneCycleLR adaptive LR
-                #scheduler.step()
+                scheduler.step()
                 train_losses.append(batch_loss.item())
 
 
@@ -453,7 +455,7 @@ class ClaimClassifier():
             avg_valid_losses.append(valid_loss)
 
             # Signal ReduceLROnPlateau adapaptive LR with validation loss
-            scheduler.step(valid_loss)
+            #scheduler.step(valid_loss)
 
             train_losses = []
             valid_losses = []
@@ -865,7 +867,7 @@ class ClaimClassifier():
         return pred_y.numpy()
 
 
-    def predict_probabilities(self, X_raw):
+    def predict_proba(self, X_raw):
         """
         Used in Part 3
         """
@@ -978,13 +980,13 @@ class Insurance_NN(nn.Module):
         self.apply_layers = nn.Sequential(
             # 2 fully connected hidden layers of 8 neurons goes to 1
             # 9/6 - (100 - 10) - 1
-            nn.Linear(9, 70),
+            nn.Linear(9, 20),
             nn.LeakyReLU(inplace=True),
             nn.Dropout(),
-            nn.Linear(70, 10),
-            nn.LeakyReLU(inplace=True),
-            nn.Dropout(),
-            nn.Linear(10, 1),
+            #nn.Linear(20, 5),
+            #nn.LeakyReLU(inplace=True),
+            #nn.Dropout(),
+            nn.Linear(20, 1),
             nn.Sigmoid()
         )
 

@@ -168,9 +168,12 @@ class PricingModelLinear():
         # =============================================================
         # REMEMBER TO A SIMILAR LINE TO THE FOLLOWING SOMEWHERE IN THE CODE
         X_clean = self._preprocessor(X_raw)
-
+        #X_clean = X_raw
         # return probabilities for the positive class (label 1)
-        return  self.base_classifier.predict_probabilities(X_clean)
+        a = self.base_classifier.predict_proba(X_clean)
+        print(a.shape)
+        print(a)
+        return  self.base_classifier.predict_proba(X_clean)
 
     def predict_premium(self, X_raw):
         """Predicts premiums based on the pricing model.
@@ -290,4 +293,5 @@ if __name__ == "__main__":
     #test2 = load_model()
     #print(test2.predict_premium(x))
     test.fit(train_data[0], train_data[1], claims_raw, False)
+    #test.predict_claim_probability(test_data[0])
     test.base_classifier.evaluate_architecture(True)

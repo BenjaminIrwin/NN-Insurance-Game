@@ -177,7 +177,7 @@ class PricingModel():
         X_clean = self._preprocessor(X_raw)
 
         # return probabilities for the positive class (label 1)
-        return self.base_classifier.predict_probabilities(X_clean)
+        return self.base_classifier.predict_proba(X_clean)
 
     def predict_premium(self, X_raw):
         """Predicts premiums based on the pricing model.
