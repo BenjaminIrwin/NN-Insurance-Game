@@ -12,6 +12,7 @@ from sklearn import metrics
 #from pytorchtools import EarlyStopping
 from sklearn import preprocessing
 from scipy import stats
+import math
 
 import torch
 import torch.nn as nn
@@ -204,8 +205,9 @@ class ClaimClassifier():
             #dat = dat.drop(columns=["vh_sale_begin", "vh_sale_end", "vh_age"])
         x = dat.drop(columns=["claim_amount", "made_claim"])
         y = dat["made_claim"]
+        y2 = dat["claim_amount"]
 
-        return x, y
+        return x, y, y2
 
     def separate_pos_neg(self, x, y):
 
@@ -386,8 +388,8 @@ class ClaimClassifier():
 
         #print(torch.sum(train_y)/train_y.shape[0])
         optimiser = torch.optim.AdamW(model.parameters(), lr=0.01)
-        #scheduler = torch.optim.lr_scheduler.OneCycleLR(optimiser, max_lr=0.001, steps_per_epoch=900,epochs=100)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, patience=10)
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimiser, max_lr=0.001, steps_per_epoch=900,epochs=100)
+        #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, patience=10)
 
         # to track the training loss as the model trains
         train_losses = []
@@ -408,10 +410,10 @@ class ClaimClassifier():
                                                          random_state=0)
             shuff_val_x, shuff_val_y = shuffle(val_x, val_y, random_state=0)
 
-            x_batches = torch.split(shuffled_train_x, 20, dim=0)
-            y_batches = torch.split(shuffled_train_y, 20, dim=0)
-            x_val_batches = torch.split(shuff_val_x, 20, dim=0)
-            y_val_batches = torch.split(shuff_val_y, 20, dim=0)
+            x_batches = torch.split(shuffled_train_x, 16, dim=0)
+            y_batches = torch.split(shuffled_train_y, 16, dim=0)
+            x_val_batches = torch.split(shuff_val_x, 16, dim=0)
+            y_val_batches = torch.split(shuff_val_y, 16, dim=0)
 
             for param_group in optimiser.param_groups:
                 print("\nLearning Rate = ",param_group['lr'])
@@ -584,14 +586,15 @@ class ClaimClassifier():
         return model
 
 
-    def UpsampleTrain(self, model, train_x, train_y, val_x, val_y, Weighted = True):
+    def WeightedUpsampleTrain(self, model, train_x, train_y, val_x, val_y):
         # UNFINISHED
         criterion = nn.BCELoss()
+        #print(train_x,train_y)
 
-        optimiser = torch.optim.AdamW(model.parameters(), lr=0.1)
+        optimiser = torch.optim.AdamW(model.parameters(), lr=0.01)
         # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimiser, max_lr=0.1,steps_per_epoch=140,epochs=500)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser,
-                                                               patience=25)
+                                                               patience=50)
 
         # to track the training loss as the model trains
         train_losses = []
@@ -604,42 +607,22 @@ class ClaimClassifier():
 
         early_stopping = EarlyStopping(patience=100, verbose=True)
 
-        # Separate into positive and negative samples
-        (neg_train_x, neg_train_y), (pos_train_x, pos_train_y) = \
-            self.separate_pos_neg(train_x, train_y)
-
-        print(len(pos_train_y))
-        print(pos_train_x.shape)
-
-        print(len(neg_train_y))
-
-        neg_train_x, neg_train_y = shuffle(neg_train_x, neg_train_y)
-        num_epochs = 500
+        num_epochs = 200
 
         for epoch in range(num_epochs):
             model.train()
 
-            neg_train_x, neg_train_y = shuffle(neg_train_x, neg_train_y)
-
-            # 2004, 2508, 3012
-            train_x_new = np.concatenate(
-                (neg_train_x[:int(1.0 * len(pos_train_x))], pos_train_x))
-            train_y_new = np.concatenate(
-                (neg_train_y[:int(1.0 * len(pos_train_x))], pos_train_y))
-
-            # concat first 1668 of this matrix to pos vals then proceed as if theyr're train_x and train_y
-            shuffled_train_x, shuffled_train_y = shuffle(train_x_new,
-                                                         train_y_new,
+            shuffled_train_x, shuffled_train_y = shuffle(train_x, train_y,
                                                          random_state=0)
             shuff_val_x, shuff_val_y = shuffle(val_x, val_y, random_state=0)
 
-            shuffled_train_x = torch.from_numpy(shuffled_train_x)
-            shuffled_train_y = torch.from_numpy(shuffled_train_y)
+            #shuffled_train_x = torch.from_numpy(shuffled_train_x)
+            #shuffled_train_y = torch.from_numpy(shuffled_train_y)
 
-            x_batches = torch.split(shuffled_train_x, 20, dim=0)
-            y_batches = torch.split(shuffled_train_y, 20, dim=0)
-            x_val_batches = torch.split(shuff_val_x, 20, dim=0)
-            y_val_batches = torch.split(shuff_val_y, 20, dim=0)
+            x_batches = torch.split(shuffled_train_x, 32, dim=0)
+            y_batches = torch.split(shuffled_train_y, 32, dim=0)
+            x_val_batches = torch.split(shuff_val_x, 32, dim=0)
+            y_val_batches = torch.split(shuff_val_y, 32, dim=0)
 
             for param_group in optimiser.param_groups:
                 print("\nLearning Rate = ", param_group['lr'])
@@ -696,22 +679,80 @@ class ClaimClassifier():
 
         return model
 
-    def separate_data(self, X_raw, Y_raw):
+    def separate_data(self, X_raw, Y_raw, y2 = 0):
         """
         Separate data into training and test data in 85:15 ratio. The training
         data is then further partitioned to make validation set in fit( )
         class method, resulting in 70:15:15 split of train:validation:test
         data.
         """
+        # Condition where weighted upsampling is being used (so claim_amount data
+        # is needed)
+        if not isinstance(y2, int):
+            Y_raw = pd.concat([Y_raw, y2], axis=1)
 
         train_x, test_x, train_y, test_y = train_test_split(X_raw, Y_raw,
                                                               test_size=0.15)
+        if not isinstance(y2, int):
+            test_y = test_y.drop(columns= "claim_amount")
+
         # Save split for evaluation later
         if not isinstance(test_y, np.ndarray):
             test_y = test_y.to_numpy(dtype=np.float)
+
         self.test_data = (self._preprocessor(test_x), test_y)
 
         return (train_x, train_y), (test_x, test_y)
+
+
+    def upsample_generate(self, train_x, train_y, claim_amount):
+        """
+        Upsample training data for UpsampleTrain weighted
+        """
+
+        # Add claim_amount to the train_x as new column
+        train_x = np.column_stack((train_x, claim_amount))
+        # Separate into pos and negative
+        (neg_x, neg_y), (pos_x, pos_y) = self.separate_pos_neg(train_x,
+                                                               train_y)
+        #print(neg_x.shape, neg_y.shape)
+        #print(pos_x.shape, pos_y.shape)
+
+        # Remove additional claim column for neg_x
+        neg_x = neg_x[:, :-1]
+
+        # Remove and save additional claim column for pos_x
+        claim_amount = pos_x[:, -1:]
+        pos_x = pos_x[:, :-1]
+        #print(pos_x)
+        # Normalise claim amount such that their sum is 1
+        claim_multiplier = claim_amount / sum(claim_amount)
+
+        # Work out how many times to duplicate each row
+        # (sum of claim multiplier should equal len(neg_y))
+        claim_multiplier = np.ceil(claim_multiplier * len(neg_y))
+        claim_multiplier = claim_multiplier.astype(int)
+        #print(sum(claim_multiplier), len(neg_y))
+        #print(claim_multiplier.shape)
+
+        # Do duplication
+        new_pos_x = np.empty((0, pos_x.shape[1]), np.float32)
+        for i, row in enumerate(pos_x):
+            #print(row)
+            for i2 in range(claim_multiplier[i][0]):
+                new_pos_x = np.vstack((new_pos_x, row))
+                #print(row)
+
+        #print(new_pos_x)
+        #print(neg_x.shape, new_pos_x.shape)
+        new_pos_y = np.ones(len(new_pos_x))
+
+        train_x = np.append(neg_x, new_pos_x, axis=0)
+        train_y = np.append(neg_y, new_pos_y, axis=0)
+        #print(train_x.shape)
+        train_x = train_x.astype(np.float32)
+        train_y = train_y.astype(np.float32)
+        return train_x, train_y
 
 
     def fit(self, X_raw, y_raw, save_model = False):
@@ -750,6 +791,14 @@ class ClaimClassifier():
         train_x, val_x, train_y, val_y = train_test_split(X_clean, y_raw,
                                                             test_size = 0.17647)
 
+
+        if (train_y.ndim > 1):
+            claim_amount = train_y[:,1]
+            train_y = train_y[:, 0]
+            val_y = val_y[:,0]
+            # generate upsampled training data.
+            train_x, train_y = self.upsample_generate(train_x, train_y, claim_amount)
+
         # Save split for later evaluation
         self.train_data = (train_x, train_y)
         self.val_data = (val_x, val_y)
@@ -766,8 +815,10 @@ class ClaimClassifier():
 
         self.fitted_model.train()
 
-        #self.fitted_model = self.WeightedTrain(self.fitted_model, train_x, train_y, val_x, val_y)
-        self.fitted_model = self.DownsampleTrain(self.fitted_model, train_x, train_y, val_x, val_y)
+        # ----------- MAKE METHOD SELECTION -------------
+        self.fitted_model = self.WeightedTrain(self.fitted_model, train_x, train_y, val_x, val_y)
+        #self.fitted_model = self.DownsampleTrain(self.fitted_model, train_x, train_y, val_x, val_y)
+        #self.fitted_model = self.WeightedUpsampleTrain(self.fitted_model, train_x, train_y, val_x, val_y)
 
         if save_model:
             self.save_model()
@@ -1004,15 +1055,28 @@ class Insurance_NN(nn.Module):
 if __name__ == "__main__":
 
     test = ClaimClassifier(Insurance_NN())
-    x, y = test.load_data("part2_training_data.csv")
+    x, y, y2 = test.load_data("part2_training_data.csv")
+    train_data, test_data = test.separate_data(x, y)
+    test.fit(train_data[0], train_data[1], True)
+    #print(train_data[0].shape, train_data[1].shape)
+    #print(test_data[0].shape, test_data[1].shape)
+
+    #train_x, train_y = (train_data[0].to_numpy(), train_data[1].to_numpy())
+    #print(type(train_x), type(train_y))
+    #claim_amount = train_y[:, 1]
+    #train_y = train_y[:, 0]
+
+    #ans1, ans2 = test.upsample_generate(train_x, train_y, claim_amount)
+    #print(ans1, ans2)
+
     #list = [1, 3, 5, 6, 7, 8]
     #print([x.columns[i] for i in list])
     #x = x.to_numpy(dtype=float)
     #test.evaluate_input3(x, y.to_numpy(dtype=float))
 
 
-    train_data, test_data = test.separate_data(x, y)
-    test.fit(train_data[0], train_data[1], True)
+    #train_data, test_data = test.separate_data(x, y)
+    #test.fit(train_data[0], train_data[1], True)
     predictions_test = test.predict(pd.DataFrame(test_data[0]))
 
 

@@ -190,12 +190,12 @@ class PricingModelLinear():
         # REMEMBER TO INCLUDE ANY PRICING STRATEGY HERE.
         # For example you could scale all your prices down by a factor
 
-        return self.predict_claim_probability(X_raw) * self.y_mean * 0.8
+        return self.predict_claim_probability(X_raw) * self.y_mean * 0.2725
 
     def save_model(self):
         """Saves the class instance as a pickle file."""
         # =============================================================
-        with open('part3_pricing_model.pickle', 'wb') as target:
+        with open('part3_pricing_model_linear.pickle', 'wb') as target:
             pickle.dump(self, target)
 
 
@@ -262,7 +262,7 @@ class PricingModelLinear():
 
 def load_model():
     # Please alter this section so that it works in tandem with the save_model method of your class
-    with open('part3_pricing_model.pickle', 'rb') as target:
+    with open('part3_pricing_model_linear.pickle', 'rb') as target:
         trained_model = pickle.load(target)
     return trained_model
 
