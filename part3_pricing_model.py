@@ -30,6 +30,22 @@ def fit_and_calibrate_classifier(classifier, X, y):
     return calibrated_classifier
 
 
+class Insurance_NN_4(nn.Module):
+    def __init__(self):
+        super(Insurance_NN_4, self).__init__()
+
+        self.apply_layers = nn.Sequential(
+            # 2 fully connected hidden layers of 8 neurons goes to 1
+            # 9 - 1
+            nn.Linear(9, 1),
+            nn.Sigmoid()
+        )
+
+    # Defining the forward pass
+    def forward(self, x):
+        x = self.apply_layers(x)
+        return x.view(len(x))
+
 class Insurance_NN_3(nn.Module):
     def __init__(self):
         super(Insurance_NN_3, self).__init__()
@@ -37,13 +53,13 @@ class Insurance_NN_3(nn.Module):
         self.apply_layers = nn.Sequential(
             # 2 fully connected hidden layers of 8 neurons goes to 1
             # 9/6 - (100 - 10) - 1
-            nn.Linear(9, 70),
+            nn.Linear(9, 16),
             nn.LeakyReLU(inplace=True),
             nn.Dropout(),
-            nn.Linear(70, 10),
-            nn.LeakyReLU(inplace=True),
-            nn.Dropout(),
-            nn.Linear(10, 1),
+            #nn.Linear(70, 10),
+            #nn.LeakyReLU(inplace=True),
+            #nn.Dropout(),
+            nn.Linear(16, 1),
             nn.Sigmoid()
         )
 
@@ -177,7 +193,7 @@ class PricingModel():
         X_clean = self._preprocessor(X_raw)
 
         # return probabilities for the positive class (label 1)
-        return self.base_classifier.predict_probabilities(X_clean)
+        return self.base_classifier.predict_proba(X_clean)
 
     def predict_premium(self, X_raw):
         """Predicts premiums based on the pricing model.

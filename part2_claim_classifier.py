@@ -277,7 +277,7 @@ class ClaimClassifier():
         fig, ax1 = plt.subplots(figsize=(11, 4))
 
         # type of plot
-        ax1.boxplot(attributes)
+        ax1.boxplot(attributes, showfliers=False)
         labels = ['drv_age1', 'vh_age', 'vh_cyl', 'vh_din', 'pol_bonus', 'vh_sl_b',
                   'vh_sl_e', 'vh_value', 'vh_speed']
 
@@ -322,11 +322,11 @@ class ClaimClassifier():
             attributes1.append(neg_x[:, i])
             attributes2.append(pos_x[:, i])
 
-        fig, axs = plt.subplots(2, figsize=(11, 11))
+        fig, axs = plt.subplots(2, figsize=(11, 8))
 
         # type of plot
-        axs[0].boxplot(attributes1)
-        axs[1].boxplot(attributes2)
+        axs[0].boxplot(attributes1, showfliers=False)
+        axs[1].boxplot(attributes2, showfliers=False)
         labels = ['drv_age1', 'vh_age', 'vh_cyl', 'vh_din', 'pol_bonus', 'vh_sl_b',
                   'vh_sl_e', 'vh_value', 'vh_speed']
 
@@ -334,12 +334,12 @@ class ClaimClassifier():
         self.set_axis_style(axs[1], labels)
 
         # plt.show()
-        axs[0].set(xlabel="Attribute Type", ylabel="Attribute Value")
+        axs[0].set(xlabel="", ylabel="Attribute Value")
         axs[0].set_title("No Claim")
         axs[1].set(xlabel="Attribute Type", ylabel="Attribute Value")
         axs[1].set_title("Claim")
 
-        plt.subplots_adjust(bottom=0.15, wspace=0.05)
+        #plt.subplots_adjust(bottom=0.15, wspace=0.05)
         plt.savefig("compare_box.pdf", bbox_inches='tight')
 
     def evaluate_input3(self, x, y):
@@ -386,10 +386,12 @@ class ClaimClassifier():
         else:
             criterion = nn.BCELoss()
 
+        batch_size = 5
+
         #print(torch.sum(train_y)/train_y.shape[0])
-        optimiser = torch.optim.AdamW(model.parameters(), lr=0.01)
-        #scheduler = torch.optim.lr_scheduler.OneCycleLR(optimiser, max_lr=0.001, steps_per_epoch=900,epochs=100)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, patience=10)
+        optimiser = torch.optim.AdamW(model.parameters(), lr=0.0001)
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimiser, max_lr=0.001, steps_per_epoch=math.ceil((len(train_x)/batch_size)),epochs=20)
+        #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimiser, patience=10)
 
         # to track the training loss as the model trains
         train_losses = []
@@ -400,9 +402,9 @@ class ClaimClassifier():
         # to track the average validation loss per epoch as the model trains
         avg_valid_losses = []
 
-        early_stopping = EarlyStopping(patience=30, verbose=True)
+        early_stopping = EarlyStopping(patience=100, verbose=True)
 
-        num_epochs = 100
+        num_epochs = 20
 
         for epoch in range(num_epochs):
             model.train()
@@ -410,10 +412,10 @@ class ClaimClassifier():
                                                          random_state=0)
             shuff_val_x, shuff_val_y = shuffle(val_x, val_y, random_state=0)
 
-            x_batches = torch.split(shuffled_train_x, 16, dim=0)
-            y_batches = torch.split(shuffled_train_y, 16, dim=0)
-            x_val_batches = torch.split(shuff_val_x, 16, dim=0)
-            y_val_batches = torch.split(shuff_val_y, 16, dim=0)
+            x_batches = torch.split(shuffled_train_x, batch_size, dim=0)
+            y_batches = torch.split(shuffled_train_y, batch_size, dim=0)
+            x_val_batches = torch.split(shuff_val_x, batch_size, dim=0)
+            y_val_batches = torch.split(shuff_val_y, batch_size, dim=0)
 
             for param_group in optimiser.param_groups:
                 print("\nLearning Rate = ",param_group['lr'])
@@ -433,7 +435,7 @@ class ClaimClassifier():
                 batch_loss.backward()
                 optimiser.step()
                 # Signal OneCycleLR adaptive LR
-                #scheduler.step()
+                scheduler.step()
                 train_losses.append(batch_loss.item())
 
 
@@ -453,7 +455,7 @@ class ClaimClassifier():
             avg_valid_losses.append(valid_loss)
 
             # Signal ReduceLROnPlateau adapaptive LR with validation loss
-            scheduler.step(valid_loss)
+            #scheduler.step(valid_loss)
 
             train_losses = []
             valid_losses = []
@@ -865,7 +867,7 @@ class ClaimClassifier():
         return pred_y.numpy()
 
 
-    def predict_probabilities(self, X_raw):
+    def predict_proba(self, X_raw):
         """
         Used in Part 3
         """
@@ -978,13 +980,13 @@ class Insurance_NN(nn.Module):
         self.apply_layers = nn.Sequential(
             # 2 fully connected hidden layers of 8 neurons goes to 1
             # 9/6 - (100 - 10) - 1
-            nn.Linear(9, 70),
+            nn.Linear(9, 16),
             nn.LeakyReLU(inplace=True),
             nn.Dropout(),
-            nn.Linear(70, 10),
-            nn.LeakyReLU(inplace=True),
-            nn.Dropout(),
-            nn.Linear(10, 1),
+            #nn.Linear(20, 5),
+            #nn.LeakyReLU(inplace=True),
+            #nn.Dropout(),
+            nn.Linear(16, 1),
             nn.Sigmoid()
         )
 
@@ -997,6 +999,9 @@ if __name__ == "__main__":
 
     test = ClaimClassifier(Insurance_NN())
     x, y, y2 = test.load_data("part2_training_data.csv")
+    x = test._preprocessor(x)
+    test.evaluate_input2(x, y.to_numpy())
+    """
     train_data, test_data = test.separate_data(x, y)
     test.fit(train_data[0], train_data[1], True)
     #print(train_data[0].shape, train_data[1].shape)
@@ -1029,7 +1034,7 @@ if __name__ == "__main__":
 
     test.evaluate_architecture(True)
     #test.evaluate_architecture()
-
+    """
     """
     #test.evaluate_input3(x, y)
     x_clean = test._preprocessor(x)
