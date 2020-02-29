@@ -482,11 +482,7 @@ class Preprocessor(object):
             the normalization.
         """
         self.max_values = np.amax(data,axis=0,keepdims=True)
-        print(self.max_values)
-        print(self.max_values.shape)
-        print(np.amax(data,axis=0,keepdims=True))
-        print(np.amax(data,axis=0,keepdims=True).shape)
-              
+        self.min_values = np.amin(data,axis=0,keepdims=True)
         
     def apply(self, data):
         """
@@ -498,11 +494,10 @@ class Preprocessor(object):
         Returns:
             {np.ndarray} normalized dataset.
         """
-        #if(len(data.shape) == 2):
-         #   return data/self.max_values[None,:]
-        #else:
-        return data/self.max_values
         
+        return (data-self.min_values)/(self.max_values-self.min_values)
+
+    
     def revert(self, data):
         """
         Revert the pre-processing operations to retreive the original dataset.
@@ -513,10 +508,8 @@ class Preprocessor(object):
         Returns:
             {np.ndarray} reverted dataset.
         """
-        #if(len(data.shape) == 2):
-         #   return data*self.max_values[None,:]
-        #else:
-        return data*self.max_values
+      
+        return data*(self.max_values-self.min_values)+self.min_values
 
 def example_main():
 
@@ -543,7 +536,9 @@ def example_main():
 
     x_train_pre = prep_input.apply(x_train)
     x_val_pre = prep_input.apply(x_val)
-
+    print(x_train_pre)
+    print(x_val_pre)
+    
     trainer = Trainer(
         network=net,
         batch_size=8,
