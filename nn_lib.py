@@ -6,7 +6,6 @@ def xavier_init(size, gain=1.0):
     """
     Xavier initialization of network weights.
     """
-    #want variance to stay the same as we pass through each layer
     low = -gain * np.sqrt(6.0 / np.sum(size))
     high = gain * np.sqrt(6.0 / np.sum(size))
     return np.random.uniform(low=low, high=high, size=size)
@@ -96,13 +95,11 @@ class SigmoidLayer(Layer):
         self._cache_current = None
 
     def forward(self, x):
-        # x is dim (batch, inputs)
         self._cache_current = 1/(1+np.exp(-x))
         return self._cache_current
         
         
     def backward(self, grad_z):
-        #dlossz = dlossA/(dA/dZ)
         return grad_z*(self._cache_current*(1-self._cache_current))
         
 
@@ -336,6 +333,7 @@ class Trainer(object):
                 bce.
             shuffle_flag {bool} -- If True, training data is shuffled before
                 training.
+            adap_learn {bool} -- If True, apply naive adaptive learning rate
         """
         self.network = network
         self.batch_size = batch_size
@@ -364,8 +362,6 @@ class Trainer(object):
         """
         data = np.column_stack((input_dataset, target_dataset))
         np.random.shuffle(data)
-        print(data)
-        print(data.shape)
 
         #split and return
         if(len(input_dataset.shape) == 2):
@@ -536,8 +532,6 @@ def example_main():
 
     x_train_pre = prep_input.apply(x_train)
     x_val_pre = prep_input.apply(x_val)
-    print(x_train_pre)
-    print(x_val_pre)
     
     trainer = Trainer(
         network=net,
