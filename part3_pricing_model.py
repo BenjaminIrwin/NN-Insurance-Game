@@ -25,6 +25,7 @@ def fit_and_calibrate_classifier(classifier, X, y):
     classifier = classifier.fit(X_train, y_train)
 
     # This line does the calibration for you
+    y_cal = y_cal.to_numpy()[:,0]
     calibrated_classifier = CalibratedClassifierCV(
         classifier, method='sigmoid', cv='prefit').fit(X_cal, y_cal)
     return calibrated_classifier
@@ -193,7 +194,7 @@ class PricingModel():
         X_clean = self._preprocessor(X_raw)
 
         # return probabilities for the positive class (label 1)
-        return self.base_classifier.predict_proba(X_clean)
+        return self.base_classifier.predict_proba(X_clean)[:,1]
 
     def predict_premium(self, X_raw):
         """Predicts premiums based on the pricing model.
@@ -432,7 +433,7 @@ def load_model():
 
 
 if __name__ == "__main__":
-    test = PricingModel()
+    test = PricingModel(True)
     x, y, claims_raw, y1 = test.load_data("part3_training_data.csv")
 
 
@@ -451,7 +452,7 @@ if __name__ == "__main__":
     #test2 = load_model()
     #print(test2.predict_premium(x))
     test.fit(train_data[0], train_data[1], claims_raw, False)
-    test.base_classifier.evaluate_architecture(True)
+    #test.base_classifier.evaluate_architecture(True)
 
     """
     list = [2,15,17,18,21,22,23,25,26]

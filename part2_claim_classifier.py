@@ -187,6 +187,8 @@ class ClaimClassifier():
         self.test_data = 0;
         self.val_data = 0;
 
+        self.classes_ = np.array([0,1])
+
     def load_data(self, filename, drop_extra = False):
         """
         Function to load data from file
@@ -1020,8 +1022,15 @@ class ClaimClassifier():
 
         X_test = torch.Tensor(X_clean)
         oupt = self.fitted_model(X_test)  # a Tensor of floats
+        pos = oupt.detach().numpy()
+        neg = np.ones(len(pos))
+        neg = neg - pos
 
-        return oupt.detach().numpy()
+        # (N,2) array with first column being prob of 0 and second being
+        # prob of 1
+        ans = np.column_stack((neg, pos))
+
+        return ans
 
 
     def evaluate_architecture(self, with_test = False):
