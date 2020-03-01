@@ -245,8 +245,8 @@ class PricingModel():
         #dat.dropna(how="any", inplace=True)
         x = dat.drop(columns=["claim_amount", "made_claim"])
         y = dat["made_claim"]
-        y2 = dat["claim_amount"]
-        y2 = y2[y2!=0]
+        y1 = dat["claim_amount"]
+        y2 = y1[y1!=0]
         """
         # load data to single 2D array
         data_set = np.genfromtxt(filename, dtype=str, delimiter=',', skip_header=1)
@@ -257,7 +257,7 @@ class PricingModel():
         y = np.array(data_set[:, (num_att-1)], dtype=np.float)
         """
 
-        return x, y, y2.to_numpy()
+        return x, y, y2.to_numpy(), y1
 
 
     def set_axis_style(self, ax, labels):
@@ -433,11 +433,12 @@ def load_model():
 
 if __name__ == "__main__":
     test = PricingModel()
-    x, y, claims_raw = test.load_data("part3_training_data.csv")
+    x, y, claims_raw, y1 = test.load_data("part3_training_data.csv")
 
-    print(x.shape, y.shape, claims_raw.shape)
+
     x = test._preprocessor(x)
-    train_data, test_data = test.base_classifier.separate_data(x, y.to_numpy(np.float32))
+    print(x.shape, y.shape, claims_raw.shape, y1.shape)
+    train_data, test_data = test.base_classifier.separate_data(x, y, y1)
 
     print(train_data[0].shape, train_data[1].shape)
 
