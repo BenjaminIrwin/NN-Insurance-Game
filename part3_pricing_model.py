@@ -218,7 +218,7 @@ class PricingModel():
         # REMEMBER TO INCLUDE ANY PRICING STRATEGY HERE.
         # For example you could scale all your prices down by a factor
 
-        return self.predict_claim_probability(X_raw) * self.y_mean * 0.28
+        return self.predict_claim_probability(X_raw) * self.y_mean * 0.2775
 
     def save_model(self):
         """Saves the class instance as a pickle file."""
@@ -416,7 +416,7 @@ class PricingModel():
         x = x.to_numpy(dtype=str)
         for att_i in range(x.shape[1]):
             try:
-                float(x[234, att_i])
+                float(x[0, att_i])
 
             except ValueError:
                 values = x[:, att_i]
