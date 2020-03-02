@@ -26,6 +26,7 @@ def fit_and_calibrate_classifier(classifier, X, y):
     classifier = classifier.fit(X_train, y_train)
 
     # This line does the calibration for you
+    y_cal = y_cal.to_numpy()[:, 0]
     calibrated_classifier = CalibratedClassifierCV(
         classifier, method='sigmoid', cv='prefit').fit(X_cal, y_cal)
     return calibrated_classifier
@@ -143,6 +144,7 @@ class PricingModelLinear():
         if self.calibrate:
             self.base_classifier = fit_and_calibrate_classifier(
                 self.base_classifier, X_clean, y_raw)
+            self.save_model()
         else:
             self.base_classifier = self.base_classifier.fit(X_clean, y_raw)
             self.save_model()
@@ -170,10 +172,7 @@ class PricingModelLinear():
         X_clean = self._preprocessor(X_raw)
         #X_clean = X_raw
         # return probabilities for the positive class (label 1)
-        a = self.base_classifier.predict_proba(X_clean)
-        print(a.shape)
-        print(a)
-        return  self.base_classifier.predict_proba(X_clean)
+        return  self.base_classifier.predict_proba(X_clean)[:,1]
 
     def predict_premium(self, X_raw):
         """Predicts premiums based on the pricing model.
@@ -275,7 +274,12 @@ def load_model():
 
 
 if __name__ == "__main__":
-    test = PricingModelLinear()
+    test = load_model()
+    x, y, claims_raw, y1 = test.load_data("part3_training_data.csv")
+    print(test.predict_claim_probability(x).shape)
+    test.base_classifier.base_estimator.evaluate_architecture(True)
+    """
+    test = PricingModelLinear(True)
     x, y, claims_raw, y1 = test.load_data("part3_training_data.csv")
 
     print(x.shape, y.shape, claims_raw.shape)
@@ -295,3 +299,4 @@ if __name__ == "__main__":
     test.fit(train_data[0], train_data[1], claims_raw, False)
     #test.predict_claim_probability(test_data[0])
     test.base_classifier.evaluate_architecture(True)
+    """

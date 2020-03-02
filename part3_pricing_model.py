@@ -25,7 +25,7 @@ def fit_and_calibrate_classifier(classifier, X, y):
     classifier = classifier.fit(X_train, y_train)
 
     # This line does the calibration for you
-    #y_cal = y_cal.to_numpy()[:,0]
+    y_cal = y_cal.to_numpy()[:,0]
     calibrated_classifier = CalibratedClassifierCV(
         classifier, method='sigmoid', cv='prefit').fit(X_cal, y_cal)
     return calibrated_classifier
@@ -434,6 +434,18 @@ def load_model():
 
 
 if __name__ == "__main__":
+    test = load_model()
+    x, y, claims_raw, y1 = test.load_data("part3_training_data.csv")
+    print(test.predict_claim_probability(x).shape)
+    test.base_classifier.base_estimator.evaluate_architecture(True)
+    #test = PricingModel()
+    #x, y, claims_raw, y1 = test.load_data("part3_training_data.csv")
+    #print(x.shape)
+    #x.drop(columns=["drv_sex2"], inplace=True)
+    #x.dropna(how="any", inplace=True)
+    #print(x.shape)
+
+    """
     test = PricingModel(True)
     x, y, claims_raw, y1 = test.load_data("part3_training_data.csv")
 
@@ -454,6 +466,7 @@ if __name__ == "__main__":
     #print(test2.predict_premium(x))
     test.fit(train_data[0], train_data[1], claims_raw, False)
     #test.base_classifier.evaluate_architecture(True)
+    """
 
     """
     list = [2,15,17,18,21,22,23,25,26]
