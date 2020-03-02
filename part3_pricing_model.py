@@ -25,7 +25,7 @@ def fit_and_calibrate_classifier(classifier, X, y):
     classifier = classifier.fit(X_train, y_train)
 
     # This line does the calibration for you
-    y_cal = y_cal.to_numpy()[:,0]
+    #y_cal = y_cal.to_numpy()[:,0]
     calibrated_classifier = CalibratedClassifierCV(
         classifier, method='sigmoid', cv='prefit').fit(X_cal, y_cal)
     return calibrated_classifier
@@ -167,6 +167,7 @@ class PricingModel():
         if self.calibrate:
             self.base_classifier = fit_and_calibrate_classifier(
                 self.base_classifier, X_clean, y_raw)
+            self.save_model()
         else:
             self.base_classifier.fit(X_clean, y_raw)
             self.save_model()
