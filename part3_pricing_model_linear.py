@@ -274,11 +274,11 @@ def load_model():
 
 
 if __name__ == "__main__":
-    #test = load_model()
-    #x, y, claims_raw, y1 = test.load_data("part3_training_data.csv")
-    #print(test.predict_claim_probability(x).shape)
-    #test.base_classifier.evaluate_architecture(True)
-
+    test = load_model()
+    x, y, claims_raw, y1 = test.load_data("part3_training_data.csv")
+    print(test.predict_claim_probability(x).shape)
+    test.base_classifier.evaluate_architecture(True)
+    """
     test = PricingModelLinear()
     x, y, claims_raw, y1 = test.load_data("part3_training_data.csv")
 
@@ -299,4 +299,4 @@ if __name__ == "__main__":
     test.fit(train_data[0], train_data[1], claims_raw, False)
     #test.predict_claim_probability(test_data[0])
     test.base_classifier.evaluate_architecture(True)
-
+    """

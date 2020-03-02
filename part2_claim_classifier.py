@@ -1082,7 +1082,7 @@ class ClaimClassifier():
                                                   normalize='true')
             # Plot confusion for test data
             metrics.ConfusionMatrixDisplay(confusion_test, labels).plot(ax=ax3)
-            ax3.set_title("Test Set")
+            ax3.set_title("Test Set", fontsize=17)
             ax3.set_ylabel("")
             plot_width = 15
         else:
@@ -1157,7 +1157,9 @@ class Insurance_NN(nn.Module):
         return x.view(len(x))
 
 if __name__ == "__main__":
-
+    test = load_model()
+    test.evaluate_architecture(True)
+    """
     test = ClaimClassifier(Insurance_NN())
     x, y, y2 = test.load_data("part2_training_data.csv")
 
@@ -1196,7 +1198,7 @@ if __name__ == "__main__":
 
     test.evaluate_architecture(True)
     #test.evaluate_architecture()
-
+    """
     """
     #test.evaluate_input3(x, y)
     x_clean = test._preprocessor(x)
