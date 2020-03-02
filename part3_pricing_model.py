@@ -438,6 +438,7 @@ if __name__ == "__main__":
     x, y, claims_raw, y1 = test.load_data("part3_training_data.csv")
     print(test.predict_claim_probability(x).shape)
     test.base_classifier.evaluate_architecture(True)
+    """
     #test = PricingModel()
     #x, y, claims_raw, y1 = test.load_data("part3_training_data.csv")
     #print(x.shape)
@@ -445,8 +446,8 @@ if __name__ == "__main__":
     #x.dropna(how="any", inplace=True)
     #print(x.shape)
 
-    """
-    test = PricingModel(True)
+
+    test = PricingModel()
     x, y, claims_raw, y1 = test.load_data("part3_training_data.csv")
 
 
@@ -466,8 +467,8 @@ if __name__ == "__main__":
     #print(test2.predict_premium(x))
     test.fit(train_data[0], train_data[1], claims_raw, False)
     #test.base_classifier.evaluate_architecture(True)
-    """
 
+    """
     """
     list = [2,15,17,18,21,22,23,25,26]
     print([x.columns[i] for i in list])

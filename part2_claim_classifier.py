@@ -914,6 +914,14 @@ class ClaimClassifier():
         -------
         self: (optional)
             an instance of the fitted model
+
+         ======********* PLEASE NOTE **********=======
+
+         When calling this function for training with weightedUpsampleTrain
+         the y variable will contain two columns - one for the label and one
+         for the claim amount. This concatenation is done when separate_data has
+         the extra optional 3rd argument of claim_amount loaded.
+
         """
 
         # REMEMBER TO HAVE THE FOLLOWING LINE SOMEWHERE IN THE CODE
@@ -1075,6 +1083,7 @@ class ClaimClassifier():
             # Plot confusion for test data
             metrics.ConfusionMatrixDisplay(confusion_test, labels).plot(ax=ax3)
             ax3.set_title("Test Set")
+            ax3.set_ylabel("")
             plot_width = 15
         else:
             f, (ax1, ax2) = plt.subplots(1, 2)
