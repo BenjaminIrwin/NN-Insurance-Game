@@ -195,7 +195,7 @@ class PricingModelLinear():
         # REMEMBER TO INCLUDE ANY PRICING STRATEGY HERE.
         # For example you could scale all your prices down by a factor
 
-        return self.predict_claim_probability(X_raw) * self.y_mean * 0.2725
+        return self.predict_claim_probability(X_raw) * self.y_mean * 0.3
 
     def save_model(self):
         """Saves the class instance as a pickle file."""
@@ -277,7 +277,7 @@ if __name__ == "__main__":
     test = load_model()
     x, y, claims_raw, y1 = test.load_data("part3_training_data.csv")
     print(test.predict_claim_probability(x).shape)
-    test.base_classifier.base_estimator.evaluate_architecture(True)
+    test.base_classifier.evaluate_architecture(True)
     """
     test = PricingModelLinear(True)
     x, y, claims_raw, y1 = test.load_data("part3_training_data.csv")
