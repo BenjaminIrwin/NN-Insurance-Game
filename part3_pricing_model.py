@@ -218,7 +218,7 @@ class PricingModel():
         # REMEMBER TO INCLUDE ANY PRICING STRATEGY HERE.
         # For example you could scale all your prices down by a factor
 
-        return self.predict_claim_probability(X_raw) * self.y_mean * 0.29
+        return self.predict_claim_probability(X_raw) * self.y_mean * 0.28
 
     def save_model(self):
         """Saves the class instance as a pickle file."""
@@ -281,13 +281,14 @@ class PricingModel():
             attributes.append(X_raw[:, i])
 
 
-        fig, ax1 = plt.subplots(figsize=(20, 4))
+        fig, ax1 = plt.subplots(figsize=(18, 4))
 
         # type of plot
         ax1.boxplot(attributes)
 
-        labels = np.genfromtxt("part3_training_data.csv", dtype=str, delimiter=',',
-                                 max_rows=1)
+        labels = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15,
+                  16, 17, 18, 19, 20, 21, 22, 24, 24, 25, 26, 27, 28, 29, 30,
+                  31, 32, 33, 34, 35]
 
         self.set_axis_style(ax1, labels)
 
@@ -415,7 +416,7 @@ class PricingModel():
         x = x.to_numpy(dtype=str)
         for att_i in range(x.shape[1]):
             try:
-                float(x[0, att_i])
+                float(x[234, att_i])
 
             except ValueError:
                 values = x[:, att_i]
@@ -434,19 +435,23 @@ def load_model():
 
 
 if __name__ == "__main__":
-    test = load_model()
-    x, y, claims_raw, y1 = test.load_data("part3_training_data.csv")
-    print(test.predict_claim_probability(x).shape)
-    test.base_classifier.evaluate_architecture(True)
-    """
-    #test = PricingModel()
+    #test = load_model()
     #x, y, claims_raw, y1 = test.load_data("part3_training_data.csv")
-    #print(x.shape)
-    #x.drop(columns=["drv_sex2"], inplace=True)
-    #x.dropna(how="any", inplace=True)
-    #print(x.shape)
+    #print(test.predict_claim_probability(x).shape)
+    #test.base_classifier.evaluate_architecture(True)
 
+    test = PricingModel()
+    x, y, claims_raw, y1 = test.load_data("part3_training_data.csv")
+    print(x.shape)
+    x.drop(columns=["drv_sex2"], inplace=True)
+    x.dropna(how="any", inplace=True)
+    x = test.integer_encode(x)
+    min_max_scaler = preprocessing.MinMaxScaler()
+    x = min_max_scaler.fit_transform(x)
 
+    test.evaluate_input1(x)
+
+    """
     test = PricingModel()
     x, y, claims_raw, y1 = test.load_data("part3_training_data.csv")
 
